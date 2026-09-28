@@ -1,9 +1,10 @@
-'use client';
+﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { WorkbookModel, SheetData } from '@/types/sheet';
 import { GOLDEN_TEMPLATES } from '@/lib/templates/goldenTemplates';
 import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
+import { parseCSVToWorkbook } from '@/lib/engine/csvHelper';
 import AgentPipelineBar, { PipelineStage } from '@/components/pipeline/AgentPipelineBar';
 import UniverSheetWrapper from '@/components/spreadsheet/UniverSheetWrapper';
 import DynamicChartCard from '@/components/charts/DynamicChartCard';
@@ -11,28 +12,33 @@ import WhatIfPanel from '@/components/simulation/WhatIfPanel';
 import {
   Sparkles,
   Download,
+  Upload,
   FileSpreadsheet,
   Play,
-  Share2,
-  Sliders,
-  CheckCircle2,
-  Layers,
-  ChevronRight,
-  ExternalLink,
   Cloud,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react';
 
 export default function SheetBrainStudio() {
   const [currentWorkbook, setCurrentWorkbook] = useState<WorkbookModel>(GOLDEN_TEMPLATES['saas_runway']);
   const [activeTemplateKey, setActiveTemplateKey] = useState<string>('saas_runway');
+  const [customImportName, setCustomImportName] = useState<string | null>(null);
   const [promptText, setPromptText] = useState<string>('');
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>('idle');
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [activeScenario, setActiveScenario] = useState<string | undefined>(undefined);
-  const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeSheet = currentWorkbook.sheets[0];
+
+  // Auto-dismiss notification after 4 seconds
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   // Handle cell edit in the spreadsheet
   const handleSheetUpdate = (updatedSheet: SheetData) => {
@@ -51,6 +57,50 @@ export default function SheetBrainStudio() {
     }
   };
 
+  // CSV File Upload & Parsing Handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+      showToast('Please upload a valid .csv file.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text || !text.trim()) {
+        showToast('Uploaded CSV file is empty.', 'error');
+        return;
+      }
+
+      try {
+        const imported = parseCSVToWorkbook(file.name, text);
+        // Recompute all mathematical formulas if any were loaded
+        const recomputed = recalculateWorkbook(imported.sheets[0].cellData);
+        imported.sheets[0].cellData = recomputed;
+
+        setCurrentWorkbook(imported);
+        setActiveTemplateKey('imported');
+        setCustomImportName(file.name);
+        setActiveScenario(undefined);
+
+        showToast(`Successfully imported "${file.name}" with ${imported.sheets[0].columns.length} columns and ${imported.sheets[0].rowCount} rows!`);
+      } catch (err: any) {
+        console.error('CSV import error:', err);
+        showToast(`CSV Import Error: ${err.message || 'Invalid format'}`, 'error');
+      }
+    };
+
+    reader.onerror = () => {
+      showToast('Failed to read the uploaded CSV file.', 'error');
+    };
+
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input so same file can be re-imported if modified
+  };
+
   // Generate Sheet via Serverless Multi-Agent API
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +110,6 @@ export default function SheetBrainStudio() {
     setPipelineStage('planning_schema');
 
     try {
-      // Stage 1: Planning Schema
       setTimeout(() => setPipelineStage('compiling_formulas'), 500);
 
       const res = await fetch('/api/generate', {
@@ -77,9 +126,9 @@ export default function SheetBrainStudio() {
           setCurrentWorkbook(data.workbook);
           setActiveTemplateKey('custom');
           setActiveScenario(undefined);
+          showToast(`Generated custom spreadsheet for: "${userPrompt.slice(0, 40)}..."`);
         }
       } else {
-        // Graceful fallback to matching golden template
         if (/marketing|cac|ad|spend/i.test(userPrompt)) {
           handleSelectTemplate('cac_cohort');
         } else {
@@ -112,7 +161,7 @@ export default function SheetBrainStudio() {
       if (res.ok) {
         const data = await res.json();
         const deltas = data.simulation?.deltas || [];
-        
+
         deltas.forEach((d: any) => {
           const cell = updatedCells[d.cell];
           if (cell && typeof cell.v === 'number') {
@@ -126,12 +175,12 @@ export default function SheetBrainStudio() {
         });
       }
 
-      // Recompute all mathematical dependencies deterministically
       const recomputed = recalculateWorkbook(updatedCells);
       handleSheetUpdate({
         ...activeSheet,
         cellData: recomputed,
       });
+      showToast(`Simulated: "${scenarioPrompt}"`);
     } catch (err) {
       console.warn('Simulation error:', err);
     } finally {
@@ -141,10 +190,23 @@ export default function SheetBrainStudio() {
 
   const handleResetSimulation = () => {
     setActiveScenario(undefined);
-    handleSelectTemplate(activeTemplateKey === 'custom' ? 'saas_runway' : activeTemplateKey);
+    if (activeTemplateKey === 'imported' && currentWorkbook) {
+      // Keep imported workbook, just reset modified flags
+      const cleanCells = { ...activeSheet.cellData };
+      Object.keys(cleanCells).forEach(k => {
+        if (cleanCells[k].isModified) {
+          delete cleanCells[k].isModified;
+          delete cleanCells[k].deltaPercent;
+        }
+      });
+      handleSheetUpdate({ ...activeSheet, cellData: cleanCells });
+    } else {
+      handleSelectTemplate(activeTemplateKey === 'custom' ? 'saas_runway' : activeTemplateKey);
+    }
+    showToast('Reset scenario to baseline');
   };
 
-  // 1-Click CSV/XLSX Export
+  // 1-Click CSV Export
   const handleExportCSV = () => {
     const rows: string[] = [];
     const colKeys = activeSheet.columns.map(c => c.key);
@@ -163,14 +225,31 @@ export default function SheetBrainStudio() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${currentWorkbook.id}_${Date.now()}.csv`);
+    link.setAttribute('download', `${currentWorkbook.id || 'sheetbrain'}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast('Exported spreadsheet to CSV');
   };
 
   return (
     <main className="min-h-screen flex flex-col bg-studio-950 text-slate-100">
+      {/* Toast Notification Banner */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-medium animate-in fade-in slide-in-from-top-2 ${
+          notification.type === 'error'
+            ? 'bg-rose-950/90 text-rose-200 border-rose-800'
+            : 'bg-emerald-950/90 text-emerald-200 border-emerald-800'
+        }`}>
+          {notification.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-rose-400" />
+          ) : (
+            <Check className="w-4 h-4 text-emerald-400" />
+          )}
+          <span>{notification.message}</span>
+        </div>
+      )}
+
       {/* Top Header & Navigation */}
       <header className="flex items-center justify-between px-5 py-3 bg-studio-900 border-b border-studio-800">
         <div className="flex items-center gap-3">
@@ -202,6 +281,25 @@ export default function SheetBrainStudio() {
             <Play className="w-3.5 h-3.5 text-brand-emerald" />
             <span>Try Live Demo</span>
           </button>
+
+          {/* Hidden File Input for CSV Import */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".csv,text/csv"
+            className="hidden"
+          />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-xs font-medium text-slate-200 border border-studio-700 transition"
+            title="Import an existing CSV spreadsheet"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-400" />
+            <span>Import CSV</span>
+          </button>
+
           <button
             onClick={handleExportCSV}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-emerald hover:bg-brand-emeraldHover text-slate-950 font-semibold text-xs transition shadow-md shadow-emerald-500/10"
@@ -234,9 +332,24 @@ export default function SheetBrainStudio() {
           </button>
         </form>
 
-        {/* Pre-Warmed Quick Template Pills */}
+        {/* Pre-Warmed Quick Template Pills + Custom CSV Pill */}
         <div className="flex items-center gap-2 mt-2.5 overflow-x-auto text-xs text-slate-400 scrollbar-none pb-0.5">
-          <span className="text-[11px] text-slate-500 font-medium shrink-0">5 Live Templates:</span>
+          <span className="text-[11px] text-slate-500 font-medium shrink-0">Models:</span>
+
+          {customImportName && (
+            <button
+              onClick={() => setActiveTemplateKey('imported')}
+              className={`px-2.5 py-1 rounded-full text-[11px] transition shrink-0 flex items-center gap-1.5 ${
+                activeTemplateKey === 'imported'
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-semibold shadow-sm'
+                  : 'bg-studio-900 text-slate-400 border border-studio-800 hover:text-slate-200 hover:bg-studio-850'
+              }`}
+            >
+              <span>📁</span>
+              <span>{customImportName}</span>
+            </button>
+          )}
+
           {[
             { key: 'saas_runway', label: '📊 SaaS 12M Runway & Burn' },
             { key: 'cac_cohort', label: '📈 Marketing CAC & LTV Cohort' },
