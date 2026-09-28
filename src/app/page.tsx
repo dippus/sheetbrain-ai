@@ -10,14 +10,16 @@ import UniverSheetWrapper from '@/components/spreadsheet/UniverSheetWrapper';
 import DynamicChartCard from '@/components/charts/DynamicChartCard';
 import WhatIfPanel from '@/components/simulation/WhatIfPanel';
 import {
-  Sparkles,
   Download,
   Upload,
   FileSpreadsheet,
   Play,
   Cloud,
   Check,
-  AlertCircle
+  AlertCircle,
+  Table,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
 
 export default function SheetBrainStudio() {
@@ -86,7 +88,7 @@ export default function SheetBrainStudio() {
         setCustomImportName(file.name);
         setActiveScenario(undefined);
 
-        showToast(`Successfully imported "${file.name}" with ${imported.sheets[0].columns.length} columns and ${imported.sheets[0].rowCount} rows!`);
+        showToast(`Imported ${file.name} (${imported.sheets[0].columns.length} columns, ${imported.sheets[0].rowCount} rows)`);
       } catch (err: any) {
         console.error('CSV import error:', err);
         showToast(`CSV Import Error: ${err.message || 'Invalid format'}`, 'error');
@@ -98,7 +100,7 @@ export default function SheetBrainStudio() {
     };
 
     reader.readAsText(file);
-    e.target.value = ''; // Reset input so same file can be re-imported if modified
+    e.target.value = ''; // Reset input so same file can be re-imported
   };
 
   // Generate Sheet via Serverless Multi-Agent API
@@ -126,7 +128,7 @@ export default function SheetBrainStudio() {
           setCurrentWorkbook(data.workbook);
           setActiveTemplateKey('custom');
           setActiveScenario(undefined);
-          showToast(`Generated custom spreadsheet for: "${userPrompt.slice(0, 40)}..."`);
+          showToast(`Compiled custom model: ${userPrompt.slice(0, 35)}...`);
         }
       } else {
         if (/marketing|cac|ad|spend/i.test(userPrompt)) {
@@ -180,7 +182,7 @@ export default function SheetBrainStudio() {
         ...activeSheet,
         cellData: recomputed,
       });
-      showToast(`Simulated: "${scenarioPrompt}"`);
+      showToast(`Simulated: ${scenarioPrompt}`);
     } catch (err) {
       console.warn('Simulation error:', err);
     } finally {
@@ -191,7 +193,6 @@ export default function SheetBrainStudio() {
   const handleResetSimulation = () => {
     setActiveScenario(undefined);
     if (activeTemplateKey === 'imported' && currentWorkbook) {
-      // Keep imported workbook, just reset modified flags
       const cleanCells = { ...activeSheet.cellData };
       Object.keys(cleanCells).forEach(k => {
         if (cleanCells[k].isModified) {
@@ -229,38 +230,38 @@ export default function SheetBrainStudio() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Exported spreadsheet to CSV');
+    showToast('Exported workbook to CSV');
   };
 
   return (
-    <main className="min-h-screen flex flex-col bg-studio-950 text-slate-100">
+    <main className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
       {/* Toast Notification Banner */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-medium animate-in fade-in slide-in-from-top-2 ${
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-medium shadow-lg ${
           notification.type === 'error'
             ? 'bg-rose-950/90 text-rose-200 border-rose-800'
-            : 'bg-emerald-950/90 text-emerald-200 border-emerald-800'
+            : 'bg-slate-900 text-slate-100 border-emerald-500/40'
         }`}>
           {notification.type === 'error' ? (
-            <AlertCircle className="w-4 h-4 text-rose-400" />
+            <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
           ) : (
-            <Check className="w-4 h-4 text-emerald-400" />
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
           )}
           <span>{notification.message}</span>
         </div>
       )}
 
       {/* Top Header & Navigation */}
-      <header className="flex items-center justify-between px-5 py-3 bg-studio-900 border-b border-studio-800">
+      <header className="flex items-center justify-between px-5 py-2.5 bg-slate-900/90 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-emerald text-slate-950 font-bold shadow-lg shadow-emerald-500/20">
-            ⚡
+          <div className="flex items-center justify-center w-7 h-7 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30">
+            <Table className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-tight text-white">SheetBrain AI</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/30 font-medium">
-                AWS GenAI Studio
+              <span className="font-semibold text-sm tracking-tight text-white">SheetBrain AI</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                AWS Studio
               </span>
             </div>
             <p className="text-[11px] text-slate-400">Autonomous Multi-Agent Spreadsheet & BI Engine</p>
@@ -269,17 +270,17 @@ export default function SheetBrainStudio() {
 
         {/* Global Action Controls */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-studio-850 border border-studio-800 text-[11px] text-slate-400">
-            <Cloud className="w-3.5 h-3.5 text-blue-400" />
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-850 border border-slate-800 text-[11px] text-slate-400">
+            <Cloud className="w-3.5 h-3.5 text-sky-400" />
             <span>AWS Amplify Edge</span>
           </div>
 
           <button
             onClick={() => handleSelectTemplate('saas_runway')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-xs font-medium text-slate-200 border border-studio-700 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-750 text-xs font-medium text-slate-200 border border-slate-700 transition"
           >
-            <Play className="w-3.5 h-3.5 text-brand-emerald" />
-            <span>Try Live Demo</span>
+            <Play className="w-3 h-3 text-emerald-400" />
+            <span>Live Demo</span>
           </button>
 
           {/* Hidden File Input for CSV Import */}
@@ -293,77 +294,77 @@ export default function SheetBrainStudio() {
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-xs font-medium text-slate-200 border border-studio-700 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-750 text-xs font-medium text-slate-200 border border-slate-700 transition"
             title="Import an existing CSV spreadsheet"
           >
-            <Upload className="w-3.5 h-3.5 text-blue-400" />
+            <Upload className="w-3 h-3 text-sky-400" />
             <span>Import CSV</span>
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-emerald hover:bg-brand-emeraldHover text-slate-950 font-semibold text-xs transition shadow-md shadow-emerald-500/10"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-medium text-xs transition"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export to Excel</span>
+            <span>Export CSV</span>
           </button>
         </div>
       </header>
 
       {/* Natural Language Command Bar */}
-      <div className="px-5 py-3 bg-studio-950 border-b border-studio-800/80">
+      <div className="px-5 py-3 bg-slate-950 border-b border-slate-800/80">
         <form onSubmit={handleGenerate} className="flex flex-col md:flex-row gap-2">
           <div className="relative flex-1">
             <input
               type="text"
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
-              placeholder="e.g. Build a 12-month SaaS runway model with 3 hiring tiers and burn rate chart..."
-              className="w-full bg-studio-900 border border-studio-750 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-brand-emerald focus:ring-1 focus:ring-brand-emerald/50 shadow-inner"
+              placeholder="Describe your model, e.g. 12-month SaaS runway model with 3 hiring tiers and burn rate..."
+              className="w-full bg-slate-900 border border-slate-750 rounded-lg px-3.5 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40"
             />
           </div>
           <button
             type="submit"
             disabled={!promptText.trim()}
-            className="px-5 py-2.5 rounded-xl bg-brand-emerald hover:bg-brand-emeraldHover text-slate-950 font-semibold text-xs tracking-wide transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-40"
+            className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs tracking-wide transition flex items-center justify-center gap-1.5 disabled:opacity-40"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Generate Spreadsheet</span>
+            <span>Compile Model</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 
-        {/* Pre-Warmed Quick Template Pills + Custom CSV Pill */}
+        {/* Quick Model Selectors (Clean typography without emoji noise) */}
         <div className="flex items-center gap-2 mt-2.5 overflow-x-auto text-xs text-slate-400 scrollbar-none pb-0.5">
           <span className="text-[11px] text-slate-500 font-medium shrink-0">Models:</span>
 
           {customImportName && (
             <button
               onClick={() => setActiveTemplateKey('imported')}
-              className={`px-2.5 py-1 rounded-full text-[11px] transition shrink-0 flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded text-[11px] transition shrink-0 flex items-center gap-1.5 ${
                 activeTemplateKey === 'imported'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-semibold shadow-sm'
-                  : 'bg-studio-900 text-slate-400 border border-studio-800 hover:text-slate-200 hover:bg-studio-850'
+                  ? 'bg-sky-500/10 text-sky-400 border border-sky-500/40 font-semibold'
+                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
               }`}
             >
-              <span>📁</span>
+              <FileSpreadsheet className="w-3 h-3 text-sky-400" />
               <span>{customImportName}</span>
             </button>
           )}
 
           {[
-            { key: 'saas_runway', label: '📊 SaaS 12M Runway & Burn' },
-            { key: 'cac_cohort', label: '📈 Marketing CAC & LTV Cohort' },
-            { key: 'cap_table', label: '💼 Cap Table & Ownership Dilution' },
-            { key: 'dept_budget', label: '🏢 Departmental Budget Variance' },
-            { key: 'sprint_velocity', label: '⚡ Agile Sprint Velocity' },
+            { key: 'saas_runway', label: 'SaaS Runway' },
+            { key: 'cac_cohort', label: 'CAC & Cohort' },
+            { key: 'cap_table', label: 'Cap Table' },
+            { key: 'dept_budget', label: 'Budget Variance' },
+            { key: 'sprint_velocity', label: 'Sprint Velocity' },
           ].map(tpl => (
             <button
               key={tpl.key}
               onClick={() => handleSelectTemplate(tpl.key)}
-              className={`px-2.5 py-1 rounded-full text-[11px] transition shrink-0 ${
+              className={`px-2.5 py-1 rounded text-[11px] transition shrink-0 ${
                 activeTemplateKey === tpl.key
-                  ? 'bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-semibold shadow-sm'
-                  : 'bg-studio-900 text-slate-400 border border-studio-800 hover:text-slate-200 hover:bg-studio-850'
+                  ? 'bg-slate-800 text-emerald-400 border border-emerald-500/40 font-medium'
+                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 hover:bg-slate-850'
               }`}
             >
               {tpl.label}
@@ -381,14 +382,14 @@ export default function SheetBrainStudio() {
         <div className="lg:col-span-8 flex flex-col min-h-[520px]">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-brand-emerald" />
+              <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                 <span>{currentWorkbook.title}</span>
               </h2>
               <p className="text-xs text-slate-400">{currentWorkbook.description}</p>
             </div>
-            <div className="text-xs font-mono text-slate-400 bg-studio-900 border border-studio-800 px-2.5 py-1 rounded">
-              Auto-Calculations: <strong className="text-brand-emerald">Active</strong>
+            <div className="text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+              Reactive Math: <strong className="text-emerald-400 font-medium">Active</strong>
             </div>
           </div>
 
