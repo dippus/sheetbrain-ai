@@ -18,8 +18,10 @@ import {
   Check,
   AlertCircle,
   Table,
-  Layers,
-  ArrowRight
+  ArrowRight,
+  LayoutGrid,
+  Columns3,
+  PieChart
 } from 'lucide-react';
 
 export default function SheetBrainStudio() {
@@ -31,18 +33,17 @@ export default function SheetBrainStudio() {
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [activeScenario, setActiveScenario] = useState<string | undefined>(undefined);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [viewLayout, setViewLayout] = useState<'split' | 'grid' | 'analytics'>('split');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeSheet = currentWorkbook.sheets[0];
 
-  // Auto-dismiss notification after 4 seconds
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Handle cell edit in the spreadsheet
   const handleSheetUpdate = (updatedSheet: SheetData) => {
     setCurrentWorkbook(prev => ({
       ...prev,
@@ -50,7 +51,6 @@ export default function SheetBrainStudio() {
     }));
   };
 
-  // 1-Click Template Switcher
   const handleSelectTemplate = (templateKey: string) => {
     if (GOLDEN_TEMPLATES[templateKey]) {
       setActiveTemplateKey(templateKey);
@@ -59,7 +59,6 @@ export default function SheetBrainStudio() {
     }
   };
 
-  // CSV File Upload & Parsing Handler
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -79,7 +78,6 @@ export default function SheetBrainStudio() {
 
       try {
         const imported = parseCSVToWorkbook(file.name, text);
-        // Recompute all mathematical formulas if any were loaded
         const recomputed = recalculateWorkbook(imported.sheets[0].cellData);
         imported.sheets[0].cellData = recomputed;
 
@@ -88,7 +86,7 @@ export default function SheetBrainStudio() {
         setCustomImportName(file.name);
         setActiveScenario(undefined);
 
-        showToast(`Imported ${file.name} (${imported.sheets[0].columns.length} columns, ${imported.sheets[0].rowCount} rows)`);
+        showToast(`Imported ${file.name} (${imported.sheets[0].columns.length} cols, ${imported.sheets[0].rowCount} rows)`);
       } catch (err: any) {
         console.error('CSV import error:', err);
         showToast(`CSV Import Error: ${err.message || 'Invalid format'}`, 'error');
@@ -100,24 +98,20 @@ export default function SheetBrainStudio() {
     };
 
     reader.readAsText(file);
-    e.target.value = ''; // Reset input so same file can be re-imported
+    e.target.value = '';
   };
 
-  // Generate Sheet via Serverless Multi-Agent API
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!promptText.trim()) return;
+  const handleGenerateWithPrompt = async (promptToRun: string) => {
+    if (!promptToRun.trim()) return;
 
-    const userPrompt = promptText.trim();
     setPipelineStage('planning_schema');
-
     try {
       setTimeout(() => setPipelineStage('compiling_formulas'), 500);
 
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userPrompt }),
+        body: JSON.stringify({ prompt: promptToRun }),
       });
 
       setPipelineStage('binding_charts');
@@ -128,10 +122,10 @@ export default function SheetBrainStudio() {
           setCurrentWorkbook(data.workbook);
           setActiveTemplateKey('custom');
           setActiveScenario(undefined);
-          showToast(`Compiled custom model: ${userPrompt.slice(0, 35)}...`);
+          showToast(`Compiled custom model: ${promptToRun.slice(0, 35)}...`);
         }
       } else {
-        if (/marketing|cac|ad|spend/i.test(userPrompt)) {
+        if (/marketing|cac|ad|spend/i.test(promptToRun)) {
           handleSelectTemplate('cac_cohort');
         } else {
           handleSelectTemplate('saas_runway');
@@ -146,7 +140,11 @@ export default function SheetBrainStudio() {
     }
   };
 
-  // What-If Scenario Sensitivity Simulation via Serverless API
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleGenerateWithPrompt(promptText);
+  };
+
   const handleSimulateScenario = async (scenarioPrompt: string) => {
     setIsSimulating(true);
     setActiveScenario(scenarioPrompt);
@@ -207,7 +205,6 @@ export default function SheetBrainStudio() {
     showToast('Reset scenario to baseline');
   };
 
-  // 1-Click CSV Export
   const handleExportCSV = () => {
     const rows: string[] = [];
     const colKeys = activeSheet.columns.map(c => c.key);
@@ -270,9 +267,43 @@ export default function SheetBrainStudio() {
 
         {/* Global Action Controls */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-850 border border-slate-800 text-[11px] text-slate-400">
+          {/* View Mode Switcher */}
+          <div className="hidden md:flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs mr-2">
+            <button
+              onClick={() => setViewLayout('split')}
+              title="Split View (Grid + Analytics)"
+              className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] ${
+                viewLayout === 'split' ? 'bg-slate-800 text-emerald-400 font-medium' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Columns3 className="w-3 h-3" />
+              <span>Split</span>
+            </button>
+            <button
+              onClick={() => setViewLayout('grid')}
+              title="Full Grid View"
+              className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] ${
+                viewLayout === 'grid' ? 'bg-slate-800 text-emerald-400 font-medium' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-3 h-3" />
+              <span>Grid</span>
+            </button>
+            <button
+              onClick={() => setViewLayout('analytics')}
+              title="Full Analytics View"
+              className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] ${
+                viewLayout === 'analytics' ? 'bg-slate-800 text-emerald-400 font-medium' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <PieChart className="w-3 h-3" />
+              <span>Charts</span>
+            </button>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-850 border border-slate-800 text-[11px] text-slate-400">
             <Cloud className="w-3.5 h-3.5 text-sky-400" />
-            <span>AWS Amplify Edge</span>
+            <span>Amplify Edge</span>
           </div>
 
           <button
@@ -283,7 +314,6 @@ export default function SheetBrainStudio() {
             <span>Live Demo</span>
           </button>
 
-          {/* Hidden File Input for CSV Import */}
           <input
             type="file"
             ref={fileInputRef}
@@ -333,94 +363,163 @@ export default function SheetBrainStudio() {
           </button>
         </form>
 
-        {/* Quick Model Selectors (Clean typography without emoji noise) */}
-        <div className="flex items-center gap-2 mt-2.5 overflow-x-auto text-xs text-slate-400 scrollbar-none pb-0.5">
-          <span className="text-[11px] text-slate-500 font-medium shrink-0">Models:</span>
+        {/* Quick Suggestions & Pre-Warmed Models */}
+        <div className="flex items-center justify-between mt-2.5 overflow-x-auto text-xs text-slate-400 scrollbar-none pb-0.5 gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] text-slate-500 font-medium shrink-0">Models:</span>
+            {customImportName && (
+              <button
+                onClick={() => setActiveTemplateKey('imported')}
+                className={`px-2.5 py-1 rounded text-[11px] transition shrink-0 flex items-center gap-1.5 ${
+                  activeTemplateKey === 'imported'
+                    ? 'bg-sky-500/10 text-sky-400 border border-sky-500/40 font-semibold'
+                    : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
+                }`}
+              >
+                <FileSpreadsheet className="w-3 h-3 text-sky-400" />
+                <span>{customImportName}</span>
+              </button>
+            )}
 
-          {customImportName && (
-            <button
-              onClick={() => setActiveTemplateKey('imported')}
-              className={`px-2.5 py-1 rounded text-[11px] transition shrink-0 flex items-center gap-1.5 ${
-                activeTemplateKey === 'imported'
-                  ? 'bg-sky-500/10 text-sky-400 border border-sky-500/40 font-semibold'
-                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
-              }`}
-            >
-              <FileSpreadsheet className="w-3 h-3 text-sky-400" />
-              <span>{customImportName}</span>
-            </button>
-          )}
+            {[
+              { key: 'saas_runway', label: 'SaaS Runway' },
+              { key: 'cac_cohort', label: 'CAC & Cohort' },
+              { key: 'cap_table', label: 'Cap Table' },
+              { key: 'dept_budget', label: 'Budget Variance' },
+              { key: 'sprint_velocity', label: 'Sprint Velocity' },
+            ].map(tpl => (
+              <button
+                key={tpl.key}
+                onClick={() => handleSelectTemplate(tpl.key)}
+                className={`px-2.5 py-1 rounded text-[11px] transition shrink-0 ${
+                  activeTemplateKey === tpl.key
+                    ? 'bg-slate-800 text-emerald-400 border border-emerald-500/40 font-medium'
+                    : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 hover:bg-slate-850'
+                }`}
+              >
+                {tpl.label}
+              </button>
+            ))}
+          </div>
 
-          {[
-            { key: 'saas_runway', label: 'SaaS Runway' },
-            { key: 'cac_cohort', label: 'CAC & Cohort' },
-            { key: 'cap_table', label: 'Cap Table' },
-            { key: 'dept_budget', label: 'Budget Variance' },
-            { key: 'sprint_velocity', label: 'Sprint Velocity' },
-          ].map(tpl => (
+          {/* Quick Prompt Ideas */}
+          <div className="hidden xl:flex items-center gap-2 text-[11px] text-slate-500">
+            <span className="shrink-0">Ideas:</span>
             <button
-              key={tpl.key}
-              onClick={() => handleSelectTemplate(tpl.key)}
-              className={`px-2.5 py-1 rounded text-[11px] transition shrink-0 ${
-                activeTemplateKey === tpl.key
-                  ? 'bg-slate-800 text-emerald-400 border border-emerald-500/40 font-medium'
-                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200 hover:bg-slate-850'
-              }`}
+              onClick={() => {
+                setPromptText('Build a 12-month B2B SaaS burn projection');
+                handleGenerateWithPrompt('Build a 12-month B2B SaaS burn projection');
+              }}
+              className="text-slate-400 hover:text-slate-200 underline decoration-slate-700 underline-offset-2 truncate"
             >
-              {tpl.label}
+              "12-month B2B SaaS burn"
             </button>
-          ))}
+            <span className="text-slate-700">·</span>
+            <button
+              onClick={() => {
+                setPromptText('E-Commerce CAC and payback period model');
+                handleGenerateWithPrompt('E-Commerce CAC and payback period model');
+              }}
+              className="text-slate-400 hover:text-slate-200 underline decoration-slate-700 underline-offset-2 truncate"
+            >
+              "E-Commerce CAC & Payback"
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Multi-Agent Pipeline Status Bar */}
       <AgentPipelineBar stage={pipelineStage} currentPrompt={promptText} />
 
-      {/* Main Studio Canvas Workspace */}
-      <div className="flex-1 p-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left Column (70% on desktop): Living Univer Spreadsheet Canvas */}
-        <div className="lg:col-span-8 flex flex-col min-h-[520px]">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                <span>{currentWorkbook.title}</span>
-              </h2>
-              <p className="text-xs text-slate-400">{currentWorkbook.description}</p>
+      {/* Main Studio Canvas Workspace with Dynamic Layout Modes */}
+      <div className="flex-1 p-4">
+        {viewLayout === 'split' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
+            {/* Left 8 Cols: Spreadsheet Grid */}
+            <div className="lg:col-span-8 flex flex-col min-h-[520px]">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                    <span>{currentWorkbook.title}</span>
+                  </h2>
+                  <p className="text-xs text-slate-400">{currentWorkbook.description}</p>
+                </div>
+                <div className="text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+                  Reactive Math: <strong className="text-emerald-400 font-medium">Active</strong>
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <UniverSheetWrapper
+                  sheet={activeSheet}
+                  onCellChange={handleSheetUpdate}
+                />
+              </div>
             </div>
-            <div className="text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
-              Reactive Math: <strong className="text-emerald-400 font-medium">Active</strong>
+
+            {/* Right 4 Cols: Analytics & What-If Simulator */}
+            <div className="lg:col-span-4 flex flex-col gap-4">
+              <div className="flex-1 min-h-[280px]">
+                <DynamicChartCard
+                  config={currentWorkbook.chartConfig}
+                  sheet={activeSheet}
+                />
+              </div>
+              <div>
+                <WhatIfPanel
+                  onSimulate={handleSimulateScenario}
+                  onReset={handleResetSimulation}
+                  activeScenario={activeScenario}
+                  isSimulating={isSimulating}
+                />
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="flex-1">
-            <UniverSheetWrapper
-              sheet={activeSheet}
-              onCellChange={handleSheetUpdate}
-            />
-          </div>
-        </div>
+        {viewLayout === 'grid' && (
+          <div className="flex flex-col h-full min-h-[640px]">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  <span>{currentWorkbook.title} (Expanded Grid)</span>
+                </h2>
+                <p className="text-xs text-slate-400">{currentWorkbook.description}</p>
+              </div>
+              <div className="text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+                Columns: <strong className="text-emerald-400">{activeSheet.columns.length}</strong> | Rows: <strong className="text-emerald-400">{activeSheet.rowCount}</strong>
+              </div>
+            </div>
 
-        {/* Right Column (30% on desktop): Analytics & What-If Simulator */}
-        <div className="lg:col-span-4 flex flex-col gap-4">
-          {/* Dynamic Recharts Visualization */}
-          <div className="flex-1 min-h-[280px]">
-            <DynamicChartCard
-              config={currentWorkbook.chartConfig}
-              sheet={activeSheet}
-            />
+            <div className="flex-1">
+              <UniverSheetWrapper
+                sheet={activeSheet}
+                onCellChange={handleSheetUpdate}
+              />
+            </div>
           </div>
+        )}
 
-          {/* What-If Scenario Simulation Panel */}
-          <div>
-            <WhatIfPanel
-              onSimulate={handleSimulateScenario}
-              onReset={handleResetSimulation}
-              activeScenario={activeScenario}
-              isSimulating={isSimulating}
-            />
+        {viewLayout === 'analytics' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full min-h-[640px]">
+            <div className="lg:col-span-7 flex flex-col">
+              <DynamicChartCard
+                config={currentWorkbook.chartConfig}
+                sheet={activeSheet}
+              />
+            </div>
+            <div className="lg:col-span-5 flex flex-col">
+              <WhatIfPanel
+                onSimulate={handleSimulateScenario}
+                onReset={handleResetSimulation}
+                activeScenario={activeScenario}
+                isSimulating={isSimulating}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   );
