@@ -102,3 +102,14 @@ Upon completing any task:
 2. List all modified and created files with clickable markdown links.
 3. Provide verification results (e.g. `tsc --noEmit` passing, build status).
 4. State the recommended next task for human approval.
+
+---
+
+## 14. Frontend Design Toolkit Compliance (Aesthetic & Polish Standards)
+
+All UI components and layouts must adhere to the design rules established in [`docs/FRONTEND_DESIGN_TOOLKIT.md`](./docs/FRONTEND_DESIGN_TOOLKIT.md) and [`.agents/skills/frontend-design/SKILL.md`](./.agents/skills/frontend-design/SKILL.md):
+* **Intentional Aesthetic**: Maintain the curated Dark OLED Luxury / Modern Fintech studio aesthetic (`#020617` base with emerald and cyan accents).
+* **Numeric Typography**: Always use tabular numbers (`font-mono` / `tabular-nums`) for currency, percentages, formulas, and spreadsheet cells.
+* **3-Layer Depth**: Distinct L0 canvas background, L1 bordered frosted glass containers, and L2 interactive buttons with hover glow.
+* **Micro-Interactions**: Provide snappy 150ms transitions, toast banners for feedback, and color-coded delta indicators.
+* **Zero AI Slop**: Reject generic purple gradients, centered default cards, and unformatted data tables.
