@@ -50,4 +50,5 @@ export interface WorkbookModel {
   sheets: SheetData[];
   chartConfig: ChartConfig;
   lastSimulatedScenario?: string;
+  suggestedScenarios?: { label: string; prompt: string }[];
 }

@@ -13,6 +13,10 @@ export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
       xAxisKey: 'A',
       series: [{ key: 'B', label: 'Value', color: '#2563eb' }],
     },
+    suggestedScenarios: [
+      { label: '+10% Value Increase', prompt: 'Increase all numerical values by 10%' },
+      { label: '-5% Reduction', prompt: 'Decrease all numerical values by 5%' }
+    ],
     sheets: [
       {
         id: 'sheet_1',
@@ -51,6 +55,11 @@ export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
         { key: 'FilesChanged', label: 'Files Changed', color: '#0d9488' },
       ],
     },
+    suggestedScenarios: [
+      { label: 'Double Insertions', prompt: 'Double the number of insertions across all commits' },
+      { label: '-50% Code Deletions', prompt: 'Reduce all deletion metrics by 50%' },
+      { label: '10x Multiplier', prompt: 'Multiply all files changed and insertions by 10' }
+    ],
     sheets: [
       {
         id: 'git_sheet',
@@ -112,6 +121,10 @@ export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
         { key: 'Version', label: 'Version', color: '#2563eb' },
       ],
     },
+    suggestedScenarios: [
+      { label: 'Major Version Upgrade', prompt: 'Change all versions to next major release (e.g. 15.0.0)' },
+      { label: 'Enforce MIT License', prompt: 'Change all non-MIT licenses to MIT' }
+    ],
     sheets: [
       {
         id: 'deps_sheet',

@@ -959,6 +959,7 @@ export default function SheetBrainStudio() {
               onCommitBaseline={handleCommitBaseline}
               activeScenario={activeScenario}
               isSimulating={isSimulating}
+              suggestedScenarios={safeWorkbook?.suggestedScenarios}
             />
           )}
 
