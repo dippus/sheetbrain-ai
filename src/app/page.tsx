@@ -913,8 +913,12 @@ export default function SheetBrainStudio() {
             </button>
           </div>
 
-          <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            {activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} rows · {activeSheet?.columns?.length || 0} columns · Auto-calc
+          <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+              Univer Office Engine
+            </span>
+            <span>{activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} rows · {activeSheet?.columns?.length || 0} cols · Formula Auto-calc</span>
           </div>
         </div>
 
@@ -923,6 +927,7 @@ export default function SheetBrainStudio() {
           <StudioErrorBoundary fallbackTitle="Spreadsheet View Recovered" onReset={() => handleSelectTemplate(activeTemplateKey)}>
           {activeView === 'grid' && (
             <UniverSheetWrapper
+              key={`${safeWorkbook?.id || activeTemplateKey || 'wb'}_${activeSheetId}`}
               sheet={activeSheet}
               sheets={safeWorkbook?.sheets || [activeSheet]}
               activeSheetId={activeSheetId}
