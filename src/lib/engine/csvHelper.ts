@@ -11,7 +11,7 @@ export function indexToColLetter(index: number): string {
   return letter;
 }
 
-// Robust CSV Line Splitter handling quotes
+// CSV Line Splitter handling quotes
 export function parseCSVLines(csvText: string): string[][] {
   const rows: string[][] = [];
   const lines = csvText.split(/\r?\n/);
@@ -39,7 +39,7 @@ export function parseCSVLines(csvText: string): string[][] {
   return rows;
 }
 
-const PALETTE = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
+const PALETTE = ['#2563eb', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
 
 export function parseCSVToWorkbook(fileName: string, csvText: string): WorkbookModel {
   const rawRows = parseCSVLines(csvText);
@@ -81,11 +81,19 @@ export function parseCSVToWorkbook(fileName: string, csvText: string): WorkbookM
     else if (isPercentage) type = 'percentage';
     else if (isNumeric && sampleCount > 0) type = 'number';
 
+    // Calculate column width dynamically from header and data sample
+    let maxLen = headerLabel.length;
+    for (const r of dataRows.slice(0, 25)) {
+      const cellText = String(r[c] || '');
+      if (cellText.length > maxLen) maxLen = cellText.length;
+    }
+    const computedWidth = Math.max(130, Math.min(360, maxLen * 9 + 24));
+
     columns.push({
       key: colKey,
       label: headerLabel,
       type,
-      width: Math.max(120, headerLabel.length * 11),
+      width: computedWidth,
     });
 
     // Header cell
@@ -138,20 +146,38 @@ export function parseCSVToWorkbook(fileName: string, csvText: string): WorkbookM
     type: series.length > 1 ? 'bar' : 'line',
     title: `${fileName.replace(/\.[^/.]+$/, '')} Visualization`,
     xAxisKey: labelCol.key,
-    series: series.length > 0 ? series : [{ key: columns[1]?.key || 'B', label: 'Value', color: '#10b981' }],
+    series: series.length > 0 ? series : [{ key: columns[1]?.key || 'B', label: 'Value', color: '#2563eb' }],
   };
 
-  const cleanName = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-  const title = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+  const baseName = fileName.replace(/\.[^/.]+$/, '');
+  let displayTitle = baseName.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  let sheetName = 'Sheet 1';
+
+  if (baseName === 'blank_sheet') {
+    displayTitle = 'Untitled Spreadsheet';
+    sheetName = 'Sheet 1';
+  } else if (baseName === 'git_commits') {
+    displayTitle = 'Git Commit History';
+    sheetName = 'Commits';
+  } else if (baseName === 'project_dependencies') {
+    displayTitle = 'Project Dependencies';
+    sheetName = 'Packages';
+  } else if (baseName === 'codebase_inventory') {
+    displayTitle = 'Codebase File Inventory';
+    sheetName = 'Files';
+  } else if (baseName === 'git_file_churn') {
+    displayTitle = 'Git File Churn';
+    sheetName = 'Diffs';
+  }
 
   return {
-    id: `custom_${Date.now()}`,
-    title: `${title} (Imported CSV)`,
-    description: `Imported from ${fileName} with ${rawRows.length} rows and ${colCount} columns.`,
-    category: 'Imported Data',
+    id: `wb_${Date.now()}`,
+    title: displayTitle,
+    description: `Live dataset from ${fileName} with ${rawRows.length} rows and ${colCount} columns.`,
+    category: 'Local Data',
     sheets: [{
       id: 'sheet_1',
-      name: 'Imported Sheet',
+      name: sheetName,
       rowCount,
       columnCount: colCount,
       columns,

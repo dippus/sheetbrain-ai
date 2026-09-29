@@ -39,7 +39,7 @@ Rules:
     "type": "line",
     "title": "Title",
     "xAxisKey": "Month",
-    "series": [{ "key": "MRR", "label": "MRR", "color": "#10B981" }]
+    "series": [{ "key": "MRR", "label": "MRR", "color": "#2563eb" }]
   }
 }`;
 
@@ -61,7 +61,7 @@ Rules:
           type: 'line',
           title: 'Financial Trend',
           xAxisKey: 'A',
-          series: [{ key: 'B', label: 'Primary Series', color: '#10B981' }],
+          series: [{ key: 'B', label: 'Primary Series', color: '#2563eb' }],
         },
         sheets: [
           {
@@ -83,26 +83,25 @@ Rules:
       });
     }
 
-    // Graceful Fallback: Deterministic Local Template Matcher
-    const isMarketing = /marketing|cac|ad|spend|cohort/i.test(prompt);
-    const template = isMarketing ? GOLDEN_TEMPLATES['cac_cohort'] : GOLDEN_TEMPLATES['saas_runway'];
+    // Clean Local Template Fallback
+    const baseTemplate = GOLDEN_TEMPLATES['blank_sheet'];
 
     return NextResponse.json({
       success: true,
       workbook: {
-        ...template,
+        ...baseTemplate,
         id: `wb_${Date.now()}`,
-        description: prompt,
+        title: prompt ? `Analysis: ${prompt.slice(0, 32)}` : 'Untitled Spreadsheet',
+        description: prompt || 'Clean spreadsheet workspace',
       },
-      source: 'local_deterministic_engine',
-      latencyMs: bedrockResult.latencyMs || 50,
-      note: 'Processed via SheetBrain Fast Engine',
+      source: 'local_engine',
+      latencyMs: bedrockResult.latencyMs || 20,
     });
   } catch (err: any) {
     console.error('[API /generate] Error:', err);
     return NextResponse.json({
       success: true,
-      workbook: GOLDEN_TEMPLATES['saas_runway'],
+      workbook: GOLDEN_TEMPLATES['blank_sheet'],
       source: 'fallback_safe_default',
     });
   }

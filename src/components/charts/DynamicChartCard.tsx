@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useMemo } from 'react';
 import { ChartConfig, SheetData } from '@/types/sheet';
@@ -18,10 +18,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp,
-  BarChart2,
-  LineChart as LineIcon,
-  Activity,
-  Layers
+  BarChart2
 } from 'lucide-react';
 
 interface DynamicChartCardProps {
@@ -32,7 +29,6 @@ interface DynamicChartCardProps {
 export default function DynamicChartCard({ config, sheet }: DynamicChartCardProps) {
   const [activeChartType, setActiveChartType] = useState<'line' | 'bar' | 'area'>(config.type || 'line');
 
-  // Transform sheet grid rows into recharts-compatible data objects
   const { chartData, kpis } = useMemo(() => {
     const data: Record<string, any>[] = [];
     const xCol = sheet.columns.find(c =>
@@ -80,7 +76,6 @@ export default function DynamicChartCard({ config, sheet }: DynamicChartCardProp
     }
 
     const avgVal = dataPointCount > 0 ? Math.round(totalSum / dataPointCount) : 0;
-
     return {
       chartData: data,
       kpis: {
@@ -91,154 +86,130 @@ export default function DynamicChartCard({ config, sheet }: DynamicChartCardProp
     };
   }, [sheet]);
 
-  const series = config.series.length > 0 ? config.series : [{ key: 'B', label: 'Value', color: '#10b981' }];
+  const series = config.series.length > 0 ? config.series : [{ key: 'B', label: 'Value', color: '#2563eb' }];
+
+  const formatNum = (v: number) => {
+    if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
+    if (v >= 1000) return `$${(v / 1000).toFixed(1)}k`;
+    return `$${v}`;
+  };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-full shadow-xl">
-      {/* Header & Controls */}
-      <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-800 gap-2 mb-3">
+    <div className="bg-white dark:bg-[#0d1422] border border-slate-300 dark:border-[#1e293b] rounded p-4 flex flex-col h-full text-xs text-slate-800 dark:text-slate-200 transition-colors">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-[#1e293b] mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <TrendingUp className="w-4 h-4" />
-          </div>
+          <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           <div>
-            <h3 className="text-sm font-semibold text-slate-100">{config.title}</h3>
-            <p className="text-[11px] text-slate-400">Reactive visualization synced to grid</p>
+            <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">{config.title}</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Live data projection</p>
           </div>
         </div>
 
-        {/* Chart Type Segmented Switcher */}
-        <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+        {/* Type Switcher */}
+        <div className="flex items-center bg-slate-100 dark:bg-[#162031] p-0.5 rounded border border-slate-200 dark:border-[#223049] text-xs">
           <button
             onClick={() => setActiveChartType('line')}
-            title="Line Chart"
-            className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] ${
-              activeChartType === 'line'
-                ? 'bg-slate-800 text-emerald-400 font-medium shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            className={`px-2 py-1 rounded transition ${activeChartType === 'line' ? 'bg-white dark:bg-[#0c121e] text-blue-700 dark:text-blue-400 shadow-sm font-medium' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
           >
-            <LineIcon className="w-3 h-3" />
-            <span>Line</span>
+            Line
           </button>
           <button
             onClick={() => setActiveChartType('bar')}
-            title="Bar Chart"
-            className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] ${
-              activeChartType === 'bar'
-                ? 'bg-slate-800 text-emerald-400 font-medium shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            className={`px-2 py-1 rounded transition ${activeChartType === 'bar' ? 'bg-white dark:bg-[#0c121e] text-blue-700 dark:text-blue-400 shadow-sm font-medium' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
           >
-            <BarChart2 className="w-3 h-3" />
-            <span>Bar</span>
+            Bar
           </button>
           <button
             onClick={() => setActiveChartType('area')}
-            title="Area Chart"
-            className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] ${
-              activeChartType === 'area'
-                ? 'bg-slate-800 text-emerald-400 font-medium shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            className={`px-2 py-1 rounded transition ${activeChartType === 'area' ? 'bg-white dark:bg-[#0c121e] text-blue-700 dark:text-blue-400 shadow-sm font-medium' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
           >
-            <Activity className="w-3 h-3" />
-            <span>Area</span>
+            Area
           </button>
         </div>
       </div>
 
-      {/* KPI Summary Metric Pills */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2 text-center">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block">Max Peak</span>
-          <span className="text-xs font-semibold text-slate-200 font-mono">
-            ${kpis.max >= 1000 ? `${(kpis.max / 1000).toFixed(1)}k` : kpis.max.toLocaleString()}
-          </span>
+        <div className="p-2 bg-slate-50 dark:bg-[#111928] border border-slate-200 dark:border-[#1e293b] rounded">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Peak Value</span>
+          <span className="text-xs tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatNum(kpis.max)}</span>
         </div>
-        <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2 text-center">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block">Average</span>
-          <span className="text-xs font-semibold text-emerald-400 font-mono">
-            ${kpis.avg >= 1000 ? `${(kpis.avg / 1000).toFixed(1)}k` : kpis.avg.toLocaleString()}
-          </span>
+        <div className="p-2 bg-slate-50 dark:bg-[#111928] border border-slate-200 dark:border-[#1e293b] rounded">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Average</span>
+          <span className="text-xs tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatNum(kpis.avg)}</span>
         </div>
-        <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2 text-center">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block">Data Points</span>
-          <span className="text-xs font-semibold text-sky-400 font-mono">
-            {chartData.length} periods
-          </span>
+        <div className="p-2 bg-slate-50 dark:bg-[#111928] border border-slate-200 dark:border-[#1e293b] rounded">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Cumulative</span>
+          <span className="text-xs tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatNum(kpis.total)}</span>
         </div>
       </div>
 
       {/* Chart Canvas */}
-      <div className="flex-1 min-h-[220px] w-full">
+      <div className="flex-1 w-full min-h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
-          {activeChartType === 'bar' ? (
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" opacity={0.5} />
-              <XAxis dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} />
-              <YAxis stroke="#64748B" fontSize={11} tickLine={false} tickFormatter={(v) => `$${v >= 1000 ? `${v/1000}k` : v}`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', fontSize: '11px', color: '#F8FAFC' }}
-                itemStyle={{ color: '#F1F5F9' }}
-              />
-              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-              {series.map(s => (
-                <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} />
-              ))}
-            </BarChart>
-          ) : activeChartType === 'area' ? (
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                {series.map((s, idx) => (
-                  <linearGradient key={s.key} id={`gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={s.color} stopOpacity={0.4} />
-                    <stop offset="95%" stopColor={s.color} stopOpacity={0.0} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" opacity={0.5} />
-              <XAxis dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} />
-              <YAxis stroke="#64748B" fontSize={11} tickLine={false} tickFormatter={(v) => `$${v >= 1000 ? `${v/1000}k` : v}`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', fontSize: '11px', color: '#F8FAFC' }}
-                itemStyle={{ color: '#F1F5F9' }}
-              />
-              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-              {series.map((s, idx) => (
-                <Area
-                  key={s.key}
-                  type="monotone"
-                  dataKey={s.label}
-                  stroke={s.color}
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill={`url(#gradient-${idx})`}
-                />
-              ))}
-            </AreaChart>
-          ) : (
+          {activeChartType === 'line' ? (
             <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" opacity={0.5} />
-              <XAxis dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} />
-              <YAxis stroke="#64748B" fontSize={11} tickLine={false} tickFormatter={(v) => `$${v >= 1000 ? `${v/1000}k` : v}`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+              <YAxis stroke="#64748b" fontSize={11} tickFormatter={formatNum} tickLine={false} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', fontSize: '11px', color: '#F8FAFC' }}
-                itemStyle={{ color: '#F1F5F9' }}
+                contentStyle={{ backgroundColor: 'rgba(13,20,34,0.97)', borderColor: '#1e293b', borderRadius: '6px', fontSize: '11px', color: '#f1f5f9' }}
+                formatter={(v: any) => [typeof v === 'number' ? formatNum(v) : v, '']}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-              {series.map(s => (
+              {series.map((s) => (
                 <Line
                   key={s.key}
                   type="monotone"
                   dataKey={s.label}
-                  stroke={s.color}
-                  strokeWidth={2.5}
-                  dot={{ r: 2.5, fill: s.color }}
+                  stroke={s.color || '#2563eb'}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
                   activeDot={{ r: 5 }}
                 />
               ))}
             </LineChart>
+          ) : activeChartType === 'bar' ? (
+            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+              <YAxis stroke="#64748b" fontSize={11} tickFormatter={formatNum} tickLine={false} />
+              <Tooltip
+                contentStyle={{ backgroundColor: 'rgba(13,20,34,0.97)', borderColor: '#1e293b', borderRadius: '6px', fontSize: '11px', color: '#f1f5f9' }}
+                formatter={(v: any) => [typeof v === 'number' ? formatNum(v) : v, '']}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              {series.map((s) => (
+                <Bar
+                  key={s.key}
+                  dataKey={s.label}
+                  fill={s.color || '#2563eb'}
+                  radius={[2, 2, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          ) : (
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+              <YAxis stroke="#64748b" fontSize={11} tickFormatter={formatNum} tickLine={false} />
+              <Tooltip
+                contentStyle={{ backgroundColor: 'rgba(13,20,34,0.97)', borderColor: '#1e293b', borderRadius: '6px', fontSize: '11px', color: '#f1f5f9' }}
+                formatter={(v: any) => [typeof v === 'number' ? formatNum(v) : v, '']}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              {series.map((s) => (
+                <Area
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.label}
+                  stroke={s.color || '#2563eb'}
+                  fill={s.color || '#2563eb'}
+                  fillOpacity={0.15}
+                />
+              ))}
+            </AreaChart>
           )}
         </ResponsiveContainer>
       </div>

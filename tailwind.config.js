@@ -1,4 +1,4 @@
-/** @type {import('tailwindcss').Config} */
+﻿/** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'class',
   content: [
@@ -8,22 +8,9 @@ module.exports = {
   ],
   theme: {
     extend: {
-      colors: {
-        studio: {
-          950: '#060911',
-          900: '#0B1120',
-          850: '#111827',
-          800: '#1E293B',
-          700: '#334155',
-          border: '#1E293B',
-        },
-        brand: {
-          emerald: '#10B981',
-          emeraldHover: '#059669',
-          amber: '#F59E0B',
-          red: '#EF4444',
-          blue: '#3B82F6',
-        }
+      fontFamily: {
+        sans: ['var(--font-inter)', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-jetbrains)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
     },
   },

@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SheetBrain AI — Autonomous Multi-Agent Spreadsheet Workspace',
-  description: 'Convert natural language prompts into living, formula-driven spreadsheets with dynamic charts and What-If simulations.',
+  title: 'SheetBrain Studio — Desktop Spreadsheet & Model Engine',
+  description: 'Production desktop spreadsheet workspace with reactive formula engine, real local datasets, and scenario analysis.',
 };
 
 export default function RootLayout({
@@ -12,8 +12,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-studio-950 text-slate-100 antialiased selection:bg-brand-emerald/30 selection:text-brand-emerald">
+    <html lang="en" className="h-full dark" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const savedTheme = localStorage.getItem('sheetbrain_theme');
+                if (savedTheme === 'light') {
+                  document.documentElement.classList.remove('dark');
+                } else if (savedTheme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+                  document.documentElement.classList.remove('dark');
+                } else {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="h-full bg-[var(--app-bg)] text-[var(--cell-text)] antialiased overflow-hidden select-none">
         {children}
       </body>
     </html>

@@ -2,8 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Ensure SSR doesn't try to bundle browser-only canvas libraries
-  webpack: (config, { isServer }) => {
+  webpack: (config, { dev, isServer }) => {
+    // Disable disk filesystem caching in dev to prevent Windows file-lock corruption (ENOENT pack.gz rename errors)
+    if (dev) {
+      config.cache = false;
+    }
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
