@@ -77,50 +77,24 @@ export default function WorkspaceSidebar({
             <ChevronRight className="w-4 h-4" />
           </button>
           <div className="w-6 h-px bg-slate-200 dark:bg-[#1e293b]" />
-          <button
-            onClick={() => onSelectTemplate('blank_sheet')}
-            title="New Blank Sheet"
-            className={`p-2 rounded transition ${
-              activeTemplateKey === 'blank_sheet'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1a2333]'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onSelectTemplate('git_commits')}
-            title="Git Commits"
-            className={`p-2 rounded transition ${
-              activeTemplateKey === 'git_commits'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1a2333]'
-            }`}
-          >
-            <GitBranch className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onSelectTemplate('project_dependencies')}
-            title="NPM Dependencies"
-            className={`p-2 rounded transition ${
-              activeTemplateKey === 'project_dependencies'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1a2333]'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onSelectTemplate('codebase_inventory')}
-            title="Codebase Inventory"
-            className={`p-2 rounded transition ${
-              activeTemplateKey === 'codebase_inventory'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1a2333]'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-          </button>
+          {activeDatasets.slice(0, 6).map((d) => (
+            <button
+              key={d.key}
+              onClick={() => onSelectTemplate(d.key)}
+              title={d.label}
+              className={`p-2 rounded transition ${
+                activeTemplateKey === d.key
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1a2333]'
+              }`}
+            >
+              {d.key === 'blank_sheet' ? (
+                <Plus className="w-4 h-4" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+            </button>
+          ))}
         </div>
         <button
           onClick={onUploadClick}

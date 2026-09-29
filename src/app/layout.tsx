@@ -2,6 +2,19 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://sheetbrain.ai"),
+  openGraph: {
+    title: "SheetBrain AI Workspace",
+    description: "Autonomous multi-agent spreadsheet intelligence workspace.",
+    url: "https://sheetbrain.ai",
+    siteName: "SheetBrain AI",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SheetBrain AI Workspace",
+    description: "Autonomous multi-agent spreadsheet intelligence workspace.",
+  },
   title: 'SheetBrain Studio — Desktop Spreadsheet & Model Engine',
   description: 'Production desktop spreadsheet workspace with reactive formula engine, real local datasets, and scenario analysis.',
 };

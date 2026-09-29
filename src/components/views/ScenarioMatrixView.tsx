@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { SheetData, SheetColumn } from '@/types/sheet';
-import { Sliders, RotateCcw, TrendingUp, TrendingDown, Percent, Target, Zap } from 'lucide-react';
+import { Sliders, RotateCcw, TrendingUp, TrendingDown, Percent, Target, Play } from 'lucide-react';
 
 interface ScenarioMatrixViewProps {
   sheet: SheetData;
@@ -49,7 +49,7 @@ export default function ScenarioMatrixView({
     if (suggestedScenarios && suggestedScenarios.length > 0) {
       return suggestedScenarios;
     }
-    const colName = targetCol?.label || 'primary metric';
+    const colName = targetCol?.label || 'Target Metric';
     return [
       { label: `+20% ${colName}`, prompt: `Increase ${colName} by 20% across all periods` },
       { label: `+35% Bull Horizon`, prompt: `Simulate +35% aggressive growth in ${colName} from period 3 onwards` },
@@ -82,7 +82,7 @@ export default function ScenarioMatrixView({
               <span>Sensitivity Studio & Scenario Matrix</span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Simulate strategic variance across operational cost and growth drivers
+              Simulate strategic variance and apply hypothetical scenarios across the dataset
             </p>
           </div>
 
@@ -183,7 +183,7 @@ export default function ScenarioMatrixView({
               disabled={isSimulating}
               className="w-full py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
-              <Zap className="w-3.5 h-3.5" />
+              <Play className="w-3.5 h-3.5 fill-current" />
               <span>{isSimulating ? 'Simulating...' : `Apply Sensitivity to ${targetCol?.label || 'Driver'}`}</span>
             </button>
           </div>
@@ -199,7 +199,7 @@ export default function ScenarioMatrixView({
                   type="text"
                   value={customHypothesis}
                   onChange={(e) => setCustomHypothesis(e.target.value)}
-                  placeholder={`e.g. Cut ${targetCol?.label || 'burn'} by 15% in Q3...`}
+                  placeholder={`e.g. Decrease ${targetCol?.label || 'values'} by 15%...`}
                   className="flex-1 bg-white dark:bg-[#0c121e] border border-slate-300 dark:border-[#223049] rounded px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition"
                 />
                 <button

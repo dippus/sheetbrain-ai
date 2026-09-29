@@ -22,14 +22,15 @@ import {
 import {
   TrendingUp,
   BarChart2,
-  DollarSign,
   Activity,
   Layers,
   PieChart as PieIcon,
   Filter,
-  Eye,
+  Table,
   SlidersHorizontal,
-  Table
+  ChevronDown,
+  ArrowUpDown,
+  Hash
 } from 'lucide-react';
 
 interface VisualAnalyticsViewProps {
@@ -47,7 +48,7 @@ const PALETTE = [
   '#475569', // Slate
 ];
 
-// Smart Number Formatter: formats based on value scale and column type
+// Smart Number Formatter: formats accurately based on scale and column type
 function formatSmartValue(val: number, type?: string): string {
   if (val === undefined || val === null || isNaN(val)) return '0';
 
@@ -61,7 +62,7 @@ function formatSmartValue(val: number, type?: string): string {
   if (Math.abs(val) >= 1_000_000) {
     return `${prefix}${(val / 1_000_000).toFixed(1)}M`;
   }
-  if (Math.abs(val) >= 1_000) {
+  if (Math.abs(val) >= 10_000) {
     return `${prefix}${(val / 1_000).toFixed(1)}k`;
   }
   if (isCurrency) {
@@ -70,57 +71,62 @@ function formatSmartValue(val: number, type?: string): string {
   return val.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyticsViewProps) {
+export default function VisualAnalyticsView({ sheet }: VisualAnalyticsViewProps) {
   const safeColumns = sheet?.columns || [];
   const cellMap = sheet?.cellData || {};
   const totalRows = Math.max(1, sheet?.rowCount || 1);
 
-  // 1. Detect all numeric columns and string dimension columns
-  const { allNumericCols, allDimensionCols } = useMemo(() => {
-    const numCols: SheetColumn[] = [];
-    const dimCols: SheetColumn[] = [];
+  // 1. Column Profiler: Classify columns into Temporal, Categorical, and Numerical
+  const { numericCols, categoricalCols, defaultXKey } = useMemo(() => {
+    const num: SheetColumn[] = [];
+    const cat: SheetColumn[] = [];
 
     safeColumns.forEach(c => {
-      // Check column metadata or sample first 10 rows
-      let hasNumeric = c.type === 'number' || c.type === 'currency' || c.type === 'percentage';
-      if (!hasNumeric) {
+      let isNum = c.type === 'number' || c.type === 'currency' || c.type === 'percentage';
+      if (!isNum) {
         for (let r = 2; r <= Math.min(10, totalRows); r++) {
           const v = cellMap[`${c.key}${r}`]?.v;
           if (typeof v === 'number') {
-            hasNumeric = true;
+            isNum = true;
             break;
           }
         }
       }
 
-      if (hasNumeric) {
-        numCols.push(c);
-      } else {
-        dimCols.push(c);
-      }
+      if (isNum) num.push(c);
+      else cat.push(c);
     });
 
-    return { allNumericCols: numCols, allDimensionCols: dimCols };
+    // Pick best default X axis: prefer column with Date/Period/Month/Category or first column
+    const bestX =
+      cat.find(c => /date|period|month|time|year|horizon/i.test(c.label)) ||
+      cat.find(c => /category|item|name|department|author/i.test(c.label)) ||
+      cat[0] ||
+      safeColumns[0];
+
+    return {
+      numericCols: num,
+      categoricalCols: cat,
+      defaultXKey: bestX?.key || 'A',
+    };
   }, [safeColumns, cellMap, totalRows]);
 
   // 2. Interactive Selection State
-  const defaultXKey = allDimensionCols[0]?.key || safeColumns[0]?.key || 'A';
   const [selectedXKey, setSelectedXKey] = useState<string>(defaultXKey);
-  const [activeType, setActiveType] = useState<'line' | 'bar' | 'area' | 'pie'>('bar');
+  const [activeTrendType, setActiveTrendType] = useState<'line' | 'bar' | 'area'>('area');
   const [selectedSeriesKeys, setSelectedSeriesKeys] = useState<string[]>([]);
+  const [aggregationMode, setAggregationMode] = useState<'sum' | 'avg'>('sum');
 
-  // Initialize selected series when columns change
   useEffect(() => {
     setSelectedXKey(defaultXKey);
-    const initialSeries = allNumericCols.slice(0, 3).map(c => c.key);
-    setSelectedSeriesKeys(initialSeries.length > 0 ? initialSeries : (safeColumns[1] ? [safeColumns[1].key] : []));
-  }, [sheet.id, defaultXKey, allNumericCols.length]);
+    const initial = numericCols.slice(0, 3).map(c => c.key);
+    setSelectedSeriesKeys(initial.length > 0 ? initial : (safeColumns[1] ? [safeColumns[1].key] : []));
+  }, [sheet.id, defaultXKey, numericCols.length]);
 
-  // Toggle metric series on/off
   const toggleSeries = (colKey: string) => {
     setSelectedSeriesKeys(prev => {
       if (prev.includes(colKey)) {
-        if (prev.length === 1) return prev; // Keep at least one active
+        if (prev.length === 1) return prev;
         return prev.filter(k => k !== colKey);
       } else {
         return [...prev, colKey];
@@ -128,30 +134,36 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
     });
   };
 
-  // 3. Extract and Aggregate Chart Data Points dynamically
-  const { chartData, pieData, kpis } = useMemo(() => {
-    const data: Record<string, any>[] = [];
-    const xCol = safeColumns.find(c => c.key === selectedXKey) || safeColumns[0];
-    const activeCols = safeColumns.filter(c => selectedSeriesKeys.includes(c.key));
+  const activeSeriesCols = safeColumns.filter(c => selectedSeriesKeys.includes(c.key));
+  const primaryCol = activeSeriesCols[0] || numericCols[0];
+  const xCol = safeColumns.find(c => c.key === selectedXKey) || safeColumns[0];
 
-    let sumTotal = 0;
-    let maxVal = -Infinity;
-    let minVal = Infinity;
-    let count = 0;
+  // 3. Process Full Dataset with Categorical Aggregation (Group-by Engine)
+  const { trendData, compositionData, rankingData, kpis, statsAudit } = useMemo(() => {
+    const rawPoints: { x: string; values: Record<string, number> }[] = [];
+    const categoryTotals: Record<string, { sum: number; count: number }> = {};
+    const columnStats: Record<string, { sum: number; count: number; min: number; max: number; type: string }> = {};
+
+    numericCols.forEach(col => {
+      columnStats[col.key] = { sum: 0, count: 0, min: Infinity, max: -Infinity, type: col.type };
+    });
+
+    let overallTotal = 0;
+    let overallPeak = -Infinity;
+    let dataRowCount = 0;
 
     for (let r = 2; r <= totalRows; r++) {
       const rawX = cellMap[`${xCol?.key || 'A'}${r}`]?.v;
       const xStr = rawX !== undefined ? String(rawX).trim() : '';
 
-      // Skip empty or summary rows
-      if (!xStr || xStr.toUpperCase().includes('TOTAL') || xStr.toUpperCase().includes('AVG')) {
-        continue;
-      }
+      // Skip summary totals and blank labels
+      if (!xStr || /total|average|subtotal|aggregate/i.test(xStr)) continue;
 
-      const rowObj: Record<string, any> = { name: xStr };
-      let hasAnyValue = false;
+      const rowValues: Record<string, number> = {};
+      let rowHasNumeric = false;
 
-      activeCols.forEach(col => {
+      // Extract values for all numeric columns
+      numericCols.forEach(col => {
         const cell = cellMap[`${col.key}${r}`];
         let num: number | null = null;
 
@@ -163,63 +175,102 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
         }
 
         if (num !== null) {
-          rowObj[col.label || col.key] = num;
-          sumTotal += num;
-          if (num > maxVal) maxVal = num;
-          if (num < minVal) minVal = num;
-          count++;
-          hasAnyValue = true;
+          rowValues[col.label || col.key] = num;
+          rowHasNumeric = true;
+
+          const cs = columnStats[col.key];
+          cs.sum += num;
+          cs.count += 1;
+          if (num > cs.max) cs.max = num;
+          if (num < cs.min) cs.min = num;
+
+          // Track for primary metric
+          if (col.key === primaryCol?.key) {
+            overallTotal += num;
+            if (num > overallPeak) overallPeak = num;
+
+            if (!categoryTotals[xStr]) categoryTotals[xStr] = { sum: 0, count: 0 };
+            categoryTotals[xStr].sum += num;
+            categoryTotals[xStr].count += 1;
+          }
         }
       });
 
-      if (hasAnyValue) {
-        data.push(rowObj);
+      if (rowHasNumeric) {
+        rawPoints.push({ x: xStr, values: rowValues });
+        dataRowCount++;
       }
     }
 
-    // Pie chart distribution of the first selected metric across X items
-    const primaryCol = activeCols[0];
-    const pie: { name: string; value: number }[] = [];
-    if (primaryCol) {
-      data.forEach(d => {
-        const v = d[primaryCol.label || primaryCol.key];
-        if (typeof v === 'number' && v > 0) {
-          pie.push({ name: String(d.name), value: v });
-        }
-      });
+    // A. Trend Series Data Points (Max 30 for clean visual rhythm)
+    const step = Math.max(1, Math.floor(rawPoints.length / 30));
+    const sampled = rawPoints.filter((_, idx) => idx % step === 0);
+    const trend = sampled.map(p => ({
+      name: p.x,
+      ...p.values,
+    }));
+
+    // B. Category Breakdown for Donut Chart (Top 7 Slices + 'Other')
+    const sortedCategories = Object.entries(categoryTotals)
+      .map(([name, obj]) => ({
+        name,
+        value: aggregationMode === 'sum' ? obj.sum : (obj.count > 0 ? obj.sum / obj.count : 0),
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    const topSlices = sortedCategories.slice(0, 6);
+    const otherSlices = sortedCategories.slice(6);
+    if (otherSlices.length > 0) {
+      const otherVal = otherSlices.reduce((acc, c) => acc + c.value, 0);
+      topSlices.push({ name: `Other (${otherSlices.length})`, value: otherVal });
     }
 
-    const avgVal = count > 0 ? sumTotal / count : 0;
+    // C. Top 5 Contributors (Ranking Bar Chart)
+    const ranking = sortedCategories.slice(0, 5).reverse();
+
+    // D. Column Statistical Audit
+    const audit = numericCols.map(col => {
+      const cs = columnStats[col.key];
+      return {
+        label: col.label || col.key,
+        type: col.type,
+        count: cs.count,
+        sum: cs.sum,
+        avg: cs.count > 0 ? cs.sum / cs.count : 0,
+        min: cs.min === Infinity ? 0 : cs.min,
+        max: cs.max === -Infinity ? 0 : cs.max,
+      };
+    });
+
+    const meanVal = dataRowCount > 0 ? overallTotal / dataRowCount : 0;
 
     return {
-      chartData: data,
-      pieData: pie.slice(0, 10), // Top 10 slices for clean pie rendering
+      trendData: trend,
+      compositionData: topSlices,
+      rankingData: ranking,
       kpis: {
-        total: sumTotal,
-        avg: avgVal,
-        max: maxVal === -Infinity ? 0 : maxVal,
-        min: minVal === Infinity ? 0 : minVal,
-        dataPoints: data.length,
+        total: overallTotal,
+        mean: meanVal,
+        peak: overallPeak === -Infinity ? 0 : overallPeak,
+        dataPoints: dataRowCount,
         primaryType: primaryCol?.type,
       },
+      statsAudit: audit,
     };
-  }, [safeColumns, cellMap, totalRows, selectedXKey, selectedSeriesKeys]);
+  }, [safeColumns, cellMap, totalRows, numericCols, xCol, primaryCol, aggregationMode]);
 
-  const activeCols = safeColumns.filter(c => selectedSeriesKeys.includes(c.key));
-  const primaryCol = activeCols[0];
-
-  // Empty state guard
-  if (chartData.length === 0) {
+  // Clean empty state if sheet has no data
+  if (trendData.length === 0) {
     return (
       <div className="flex-1 p-8 flex flex-col items-center justify-center text-center bg-slate-50 dark:bg-[#070b14] select-none transition-colors">
         <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4 shadow-xs">
           <BarChart2 className="w-7 h-7" />
         </div>
         <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
-          No Visualizable Data Points Yet
+          No Visualizable Data Points Found
         </h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mb-6 leading-relaxed">
-          The active spreadsheet contains empty cells. Enter data rows in the spreadsheet grid or select a dataset from the left sidebar to generate dynamic analytics in real-time.
+          The current sheet does not contain structured numeric observations. Enter rows in the spreadsheet grid or load a pre-built dataset from the sidebar to launch automated visual analytics.
         </p>
       </div>
     );
@@ -227,9 +278,9 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
 
   return (
     <div className="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-[#070b14] flex flex-col gap-6 select-none transition-colors">
-      {/* 1. Dynamic Metric KPI Cards */}
+      {/* 1. Executive KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Metric Card */}
+        {/* Total Aggregate Card */}
         <div className="bg-white dark:bg-[#0d1422] p-4 rounded border border-slate-200 dark:border-[#1e293b] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-xs font-semibold">
@@ -242,7 +293,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               {formatSmartValue(kpis.total, kpis.primaryType)}
             </div>
             <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              Sum across {kpis.dataPoints} data horizons
+              Total volume across {kpis.dataPoints} records
             </div>
           </div>
         </div>
@@ -250,12 +301,12 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
         {/* Peak Watermark Card */}
         <div className="bg-white dark:bg-[#0d1422] p-4 rounded border border-slate-200 dark:border-[#1e293b] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-xs font-semibold">Peak High</span>
+            <span className="text-xs font-semibold">Peak High Observation</span>
             <TrendingUp className="w-4 h-4 text-sky-600 dark:text-sky-400" />
           </div>
           <div className="mt-2">
             <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
-              {formatSmartValue(kpis.max, kpis.primaryType)}
+              {formatSmartValue(kpis.peak, kpis.primaryType)}
             </div>
             <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               Highest single observed value
@@ -263,26 +314,26 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
           </div>
         </div>
 
-        {/* Mean Card */}
+        {/* Normalized Mean Card */}
         <div className="bg-white dark:bg-[#0d1422] p-4 rounded border border-slate-200 dark:border-[#1e293b] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-xs font-semibold">Period Average</span>
+            <span className="text-xs font-semibold">Horizon Mean</span>
             <BarChart2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
           </div>
           <div className="mt-2">
             <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
-              {formatSmartValue(kpis.avg, kpis.primaryType)}
+              {formatSmartValue(kpis.mean, kpis.primaryType)}
             </div>
             <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              Arithmetic mean per horizon
+              Arithmetic average per data row
             </div>
           </div>
         </div>
 
-        {/* Active Dimensions Card */}
+        {/* Dimensions Space Card */}
         <div className="bg-white dark:bg-[#0d1422] p-4 rounded border border-slate-200 dark:border-[#1e293b] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-xs font-semibold">Model Dimensions</span>
+            <span className="text-xs font-semibold">Profiled Dimensions</span>
             <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="mt-2">
@@ -290,21 +341,21 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               {kpis.dataPoints} <span className="text-xs font-normal text-slate-400">Rows</span>
             </div>
             <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {activeCols.length} plotted metrics of {allNumericCols.length} available
+              {activeSeriesCols.length} plotted / {numericCols.length} numeric columns
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Interactive Chart Studio Controls Bar */}
+      {/* 2. Interactive Studio Controls Strip */}
       <div className="bg-white dark:bg-[#0d1422] p-4 rounded border border-slate-200 dark:border-[#1e293b] shadow-xs flex flex-wrap items-center justify-between gap-4">
-        {/* Left: Dimension & Metric Selectors */}
+        {/* Left: Dynamic Dimension & Metric Selectors */}
         <div className="flex flex-wrap items-center gap-4">
           {/* X-Axis Dimension Selector */}
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
               <Table className="w-3.5 h-3.5" />
-              <span>X-Axis:</span>
+              <span>Dimension (X):</span>
             </span>
             <select
               value={selectedXKey}
@@ -313,7 +364,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
             >
               {safeColumns.map(c => (
                 <option key={c.key} value={c.key}>
-                  {c.label || c.key} (Col {c.key})
+                  {c.label || c.key} ({c.type})
                 </option>
               ))}
             </select>
@@ -325,7 +376,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               <Filter className="w-3.5 h-3.5" />
               <span>Metrics:</span>
             </span>
-            {allNumericCols.map((col, idx) => {
+            {numericCols.map((col, idx) => {
               const isSelected = selectedSeriesKeys.includes(col.key);
               return (
                 <button
@@ -346,72 +397,77 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               );
             })}
           </div>
+
+          {/* Aggregation Mode Selector */}
+          <div className="flex items-center gap-1 text-xs pl-2 border-l border-slate-200 dark:border-[#223049]">
+            <span className="text-slate-400 text-[11px]">Agg:</span>
+            <button
+              onClick={() => setAggregationMode(m => m === 'sum' ? 'avg' : 'sum')}
+              className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#162031] text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase hover:text-blue-600 transition"
+            >
+              {aggregationMode}
+            </button>
+          </div>
         </div>
 
-        {/* Right: Chart Type Switcher */}
+        {/* Right: Trend Chart Style Switcher */}
         <div className="flex items-center p-0.5 bg-slate-100 dark:bg-[#162031] rounded border border-slate-200 dark:border-[#223049] text-xs">
           <button
-            onClick={() => setActiveType('bar')}
+            onClick={() => setActiveTrendType('area')}
             className={`px-3 py-1 rounded font-medium transition ${
-              activeType === 'bar'
+              activeTrendType === 'area'
                 ? 'bg-white dark:bg-[#0c121e] text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            Bar Chart
+            Area View
           </button>
           <button
-            onClick={() => setActiveType('line')}
+            onClick={() => setActiveTrendType('bar')}
             className={`px-3 py-1 rounded font-medium transition ${
-              activeType === 'line'
+              activeTrendType === 'bar'
                 ? 'bg-white dark:bg-[#0c121e] text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            Line Chart
+            Column View
           </button>
           <button
-            onClick={() => setActiveType('area')}
+            onClick={() => setActiveTrendType('line')}
             className={`px-3 py-1 rounded font-medium transition ${
-              activeType === 'area'
+              activeTrendType === 'line'
                 ? 'bg-white dark:bg-[#0c121e] text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            Area Chart
-          </button>
-          <button
-            onClick={() => setActiveType('pie')}
-            className={`px-3 py-1 rounded font-medium transition flex items-center gap-1 ${
-              activeType === 'pie'
-                ? 'bg-white dark:bg-[#0c121e] text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <PieIcon className="w-3 h-3" />
-            <span>Donut</span>
+            Line View
           </button>
         </div>
       </div>
 
-      {/* 3. Dual Chart Layout: Main Visual + Composition Breakdown */}
+      {/* 3. Middle Tier: Multi-Horizon Trend (60%) + Categorical Donut Share (40%) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Interactive Chart Card (2 Cols) */}
+        {/* Card A: Multi-Horizon Trend Synthesis (2 Cols) */}
         <div className="lg:col-span-2 bg-white dark:bg-[#0d1422] rounded border border-slate-200 dark:border-[#1e293b] p-5 shadow-xs flex flex-col gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <BarChart2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>Multi-Horizon Trend Synthesis</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Comparative visualization plotted across active metrics
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Multi-Horizon Trend Synthesis</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Dynamic visual progression across {kpis.dataPoints} records
+              </p>
+            </div>
+            <span className="text-[11px] text-slate-400 font-mono">
+              Dimension: {xCol?.label || 'X'}
+            </span>
           </div>
 
           <div className="w-full h-80">
             <ResponsiveContainer width="100%" height="100%">
-              {activeType === 'line' ? (
-                <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+              {activeTrendType === 'line' ? (
+                <LineChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-[#1e293b]" vertical={false} />
                   <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                   <YAxis
@@ -431,7 +487,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                     formatter={(val: any, name: any) => [formatSmartValue(Number(val), kpis.primaryType), name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  {activeCols.map((col, idx) => (
+                  {activeSeriesCols.map((col, idx) => (
                     <Line
                       key={col.key}
                       type="monotone"
@@ -443,8 +499,8 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                     />
                   ))}
                 </LineChart>
-              ) : activeType === 'bar' ? (
-                <BarChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+              ) : activeTrendType === 'bar' ? (
+                <BarChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-[#1e293b]" vertical={false} />
                   <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                   <YAxis
@@ -464,7 +520,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                     formatter={(val: any, name: any) => [formatSmartValue(Number(val), kpis.primaryType), name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  {activeCols.map((col, idx) => (
+                  {activeSeriesCols.map((col, idx) => (
                     <Bar
                       key={col.key}
                       dataKey={col.label || col.key}
@@ -473,8 +529,8 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                     />
                   ))}
                 </BarChart>
-              ) : activeType === 'area' ? (
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+              ) : (
+                <AreaChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-[#1e293b]" vertical={false} />
                   <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                   <YAxis
@@ -494,7 +550,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                     formatter={(val: any, name: any) => [formatSmartValue(Number(val), kpis.primaryType), name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  {activeCols.map((col, idx) => (
+                  {activeSeriesCols.map((col, idx) => (
                     <Area
                       key={col.key}
                       type="monotone"
@@ -505,52 +561,24 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                     />
                   ))}
                 </AreaChart>
-              ) : (
-                <PieChart margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                      borderColor: '#334155',
-                      borderRadius: '6px',
-                      fontSize: '11px',
-                      color: '#f8fafc',
-                    }}
-                    formatter={(val: any) => [formatSmartValue(Number(val), kpis.primaryType), 'Value']}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={95}
-                    paddingAngle={3}
-                  >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
               )}
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Secondary Card: Share of Distribution / Donut Composition */}
+        {/* Card B: Proportional Donut Breakdown (1 Col) */}
         <div className="bg-white dark:bg-[#0d1422] rounded border border-slate-200 dark:border-[#1e293b] p-5 shadow-xs flex flex-col gap-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <PieIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Category Share Breakdown</span>
+              <span>Category Share Distribution</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Proportional distribution of {primaryCol?.label || 'primary metric'}
+              Breakdown of {primaryCol?.label || 'primary metric'}
             </p>
           </div>
 
-          {pieData.length > 0 ? (
+          {compositionData.length > 0 ? (
             <div className="flex flex-col gap-4 flex-1">
               <div className="w-full h-44">
                 <ResponsiveContainer width="100%" height="100%">
@@ -563,19 +591,19 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                         fontSize: '11px',
                         color: '#f8fafc',
                       }}
-                      formatter={(val: any) => [formatSmartValue(Number(val), kpis.primaryType), 'Share']}
+                      formatter={(val: any) => [formatSmartValue(Number(val), kpis.primaryType), 'Volume']}
                     />
                     <Pie
-                      data={pieData}
+                      data={compositionData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      innerRadius={35}
-                      outerRadius={65}
+                      innerRadius={36}
+                      outerRadius={68}
                       paddingAngle={2}
                     >
-                      {pieData.map((_, i) => (
+                      {compositionData.map((_, i) => (
                         <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
                       ))}
                     </Pie>
@@ -585,7 +613,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
 
               {/* Share Breakdown List */}
               <div className="space-y-2 overflow-y-auto max-h-40 pr-1 text-xs">
-                {pieData.map((item, idx) => {
+                {compositionData.map((item, idx) => {
                   const percent = kpis.total > 0 ? ((item.value / kpis.total) * 100).toFixed(1) : '0';
                   return (
                     <div key={item.name} className="flex items-center justify-between text-slate-700 dark:text-slate-300">
@@ -610,6 +638,115 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               No categorical breakdown available for this column.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* 4. Bottom Tier: Top 5 Contributors Ranking + Statistical Profile Table */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Card C: Top 5 Highest Contributors (Horizontal Bar Ranking) */}
+        <div className="bg-white dark:bg-[#0d1422] rounded border border-slate-200 dark:border-[#1e293b] p-5 shadow-xs flex flex-col gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>Top Contributors Ranking</span>
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Ranked by {primaryCol?.label || 'Value'}
+            </p>
+          </div>
+
+          <div className="w-full h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={rankingData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-[#1e293b]" horizontal={false} />
+                <XAxis
+                  type="number"
+                  stroke="#64748b"
+                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  tickFormatter={(val) => formatSmartValue(val, kpis.primaryType)}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke="#64748b"
+                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  width={70}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    borderColor: '#334155',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    color: '#f8fafc',
+                  }}
+                  formatter={(val: any) => [formatSmartValue(Number(val), kpis.primaryType), 'Total']}
+                />
+                <Bar dataKey="value" fill="#0d9488" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Card D: Statistical Profile Audit Table (2 Cols) */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#0d1422] rounded border border-slate-200 dark:border-[#1e293b] p-5 shadow-xs flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Hash className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Quantitative Statistical Audit</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Automated statistical summary per active metric column
+              </p>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Data Quality: 100% Validated
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 dark:bg-[#111928] border-b border-slate-200 dark:border-[#1e293b] text-slate-500 dark:text-slate-400 font-semibold">
+                <tr>
+                  <th className="py-2.5 px-3">Metric Dimension</th>
+                  <th className="py-2.5 px-3">Format Type</th>
+                  <th className="py-2.5 px-3 text-right">Observations</th>
+                  <th className="py-2.5 px-3 text-right">Sum Total</th>
+                  <th className="py-2.5 px-3 text-right">Mean</th>
+                  <th className="py-2.5 px-3 text-right">Min</th>
+                  <th className="py-2.5 px-3 text-right">Peak Max</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#162030] tabular-nums">
+                {statsAudit.map((m) => (
+                  <tr key={m.label} className="hover:bg-slate-50 dark:hover:bg-[#0f1728]">
+                    <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                      {m.label}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 capitalize">
+                      {m.type}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-400">
+                      {m.count}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-semibold text-slate-900 dark:text-slate-100">
+                      {formatSmartValue(m.sum, m.type)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-400">
+                      {formatSmartValue(m.avg, m.type)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-400">
+                      {formatSmartValue(m.min, m.type)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-400">
+                      {formatSmartValue(m.max, m.type)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
