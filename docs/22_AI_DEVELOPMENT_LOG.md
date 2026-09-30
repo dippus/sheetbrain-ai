@@ -97,8 +97,59 @@
   * **Live Verification**: Successfully verified live cloud connectivity via `npm run test:bedrock` (`[SUCCESS] AWS Bedrock Connected in 2811ms! Response: "Bedrock is online"`).
   * **Strict Quality Invariant**: `npx tsc --noEmit` verified cleanly with 0 errors, and Next.js production build compiled cleanly (`✓ Generating static pages (7/7)`).
 
+## Phase 10: Bug Fix Sprint — Undo/Redo, Data Persistence & Scenario Metrics
+* **Status**: Completed ✅
+* **Requirements**: REQ-F-005 (Native Undo/Redo), REQ-F-009 (Session Persistence), REQ-F-010 (Scenario Matrix)
+* **Actions Taken**:
+  * **FIX: Undo/Redo (Ctrl+Z / Ctrl+Y)**: [`UniverSheetCore.tsx`](../src/components/spreadsheet/UniverSheetCore.tsx) — Command filter was blocking `undo.operation`/`redo.operation`. Fixed to only skip pure non-mutation UI commands (focus, hover, scroll). Undo now triggers a fast 80ms React state sync.
+  * **FIX: Stale Data on Refresh**: [`UniverSheetCore.tsx`](../src/components/spreadsheet/UniverSheetCore.tsx) — Added `mountedSheetIdRef` to prevent old Univer canvas unmount from writing stale data over a freshly generated workbook (race condition fix).
+  * **NEW: Clear All Data Button**: [`WorkspaceSidebar.tsx`](../src/components/navigation/WorkspaceSidebar.tsx) + [`page.tsx`](../src/app/page.tsx) — Red "Clear All Data" button wipes all `sheetbrain_*` localStorage keys and resets to pristine blank state.
+  * **FIX: Scenario Metrics Wrong Columns**: [`ScenarioMatrixView.tsx`](../src/components/views/ScenarioMatrixView.tsx) — `numericColumns` now also detects columns with ≥50% numeric cell values, fixing BCA/exam/fitness data where column type wasn't set to `'number'`.
+  * **Verification**: `npx tsc --noEmit` → exit code 0. Dev server running continuously without restart required.
 
+## Phase 11: Bug Fix Sprint — Sort A-Z/Z-A, Stale Data Elimination, AI Logic & Formula Explainer
+* **Status**: Completed ✅
+* **Requirements**: REQ-F-004 (Spreadsheet Grid Operations), REQ-F-007 (Formula Engine & Plain English Explainer), REQ-F-008 (AI Multi-Agent Generation), REQ-F-009 (Session Persistence)
+* **Actions Taken**:
+  * **FIX: Sort A-Z & Z-A Ribbon Action**: [`UniverSheetWrapper.tsx`](../src/components/spreadsheet/UniverSheetWrapper.tsx) — Added `wrapperRevision` to force Univer canvas re-mount with sorted data. Upgraded `handleSortByCol` to support natural alphanumeric and numeric sorting (handling numeric strings properly). Added dedicated Sort A-Z and Sort Z-A buttons to toolbar ribbon.
+  * **FIX: Canvas Unmount Stale Overwrite**: [`UniverSheetCore.tsx`](../src/components/spreadsheet/UniverSheetCore.tsx) — Removed redundant `extractAndSyncSheet` during React component unmount. Unmount cleanup was taking dying `localWorkbook` state and writing stale unsorted or pre-AI data back into React/localStorage.
+  * **FIX: Stale Data on Refresh & Blank Sheet Reset**: [`page.tsx`](../src/app/page.tsx) — Ensured `handleSelectTemplate('blank_sheet')` ignores any dirty `sheetbrain_wb_blank_sheet` cache in localStorage. Added `setGridRevision(r => r + 1)` in `handleGenerateWithPrompt` to ensure newly compiled AI workbooks re-mount cleanly.
+  * **FIX: "Bina Logic Ke" AI Generation Slop**: [`promptSpreadsheetSynthesizer.ts`](../src/lib/engine/promptSpreadsheetSynthesizer.ts) — Major upgrade with 9 domain-specific generators: Student Exam/BCA Marks, HR Payroll, Cricket/Sports Scorecard, Restaurant Menu & Sales, Crypto/Stock Portfolio, Fitness & Workout Volume, Warehouse Inventory, and Personal Budget. Universal fallback replaced with dynamic subject-aware columns and reactive formulas (`=C{r}*D{r}`).
+  * **FIX: Formula Explainer**: [`FormulaExplainerModal.tsx`](../src/components/inspector/FormulaExplainerModal.tsx) — Enhanced `explainFormulaString` to dynamically parse column names and explain arithmetic (`*`, `-`, `+`, `/`), percentages, `ROUND`, `IF`, `COUNT`, `SUM`, and `AVERAGE` in plain business English with actual column labels.
+  * **Verification**: `npx tsc --noEmit` → exit code 0. Zero compile errors. No production build executed (hot-reloaded).
 
+## Phase 12: Fail-Proof Hackathon Architecture — Multi-Tier AI & Open-Source LLM Resiliency
+* **Status**: Completed ✅
+* **Requirements**: REQ-F-008 (AI Multi-Agent Pipeline & Zero-Downtime Fallback), REQ-NF-001 (Sub-2s Query & Generation Latency)
+* **Actions Taken**:
+  * **Open-Source LLM Provider Architecture**: [`bedrock.ts`](../src/lib/aws/bedrock.ts) — Added plug-and-play support for high-speed open-source providers (Groq with Llama 3.3, OpenRouter with DeepSeek R1 / Llama, and local offline Ollama) alongside AWS Bedrock Mantle.
+  * **5-Second Safe Inference Boundary**: Standardized network call timeout to 5000ms. If cloud quotas, rate limits, or network timeouts occur, the app transitions seamlessly to the local neuro-symbolic engine without freezing the UI or dropping error modals.
+  * **Expanded Domain Synthesis (12+ Real-World Categories)**: [`promptSpreadsheetSynthesizer.ts`](../src/lib/engine/promptSpreadsheetSynthesizer.ts) — Added specialized business engines for:
+    1. BCA / Academic Student Marks & Grade Ledgers
+    2. Study Timetables & Semester Syllabus Readiness
+    3. Employee HR Payroll & Disbursal
+    4. Hospital Patient Inpatient & Medical Billing
+    5. E-Commerce Customer Orders & Sales Invoices
+    6. SaaS Recurring Revenue (MRR), Churn & Growth Dynamics
+    7. Sports & Cricket Scorecards / League Tournaments
+    8. Restaurant & Cafe Menu Margins
+    9. Crypto & Stock Portfolio Tracking
+    10. Progressive Overload Workout Volume
+    11. Warehouse Inventory & Valuation
+    12. Personal Cash Flow & Budgets
+    13. Universal Contextual Synthesizer (subject-aware columns and reactive formulas for any arbitrary topic)
+  * **Updated Documentation**: [`.env.example`](../.env.example) updated with open-source provider options.
+  * **Verification**: `npx tsc --noEmit` → exit code 0. Zero compile errors. No production build run (dev server active).
 
-
+## Phase 13: Multi-Model Workspace Persistence, 12-Month SaaS Runway & UI Hardening
+* **Status**: Completed ✅
+* **Requirements**: REQ-F-001 (Multi-Sheet Workspace), REQ-F-006 (AWS S3 Cloud Persistence), REQ-F-008 (AI Schema Generation), REQ-NF-001 (Responsive Dark OLED UI)
+* **Actions Taken**:
+  * **12-Month SaaS Financial Runway Model**: [`promptSpreadsheetSynthesizer.ts`](../src/lib/engine/promptSpreadsheetSynthesizer.ts) — Implemented flagship 12-month venture model featuring $500K initial seed cash, MRR, Revenue, Payroll, Cloud/Server, Marketing, Net Cash Burn, and continuous linear cash balance propagation (`=J2`, `=J3`...) with full annual summary formulas and ending cash runway line charts.
+  * **Multi-Model Workspace Persistence**: [`page.tsx`](../src/app/page.tsx) — AI compiled spreadsheets now automatically register as distinct models under "Datasets & files" in the workspace sidebar. Users can seamlessly switch between previous and new models without data loss or overwrites.
+  * **Clean Dataset Deletion**: [`page.tsx`](../src/app/page.tsx) — Resolved deletion loop where deleting an active dataset spawned duplicate blank sheets. Cleaned up state and localStorage synchronization.
+  * **Greeting & Nonsense Intent Guard**: [`route.ts`](../src/app/api/generate/route.ts) — Added intent validation rejecting greetings ("hello", "hi") or vague queries with an informative error toast instead of generating illogical tables.
+  * **Permanent AWS S3 Cloud Auto-Save Indicator**: [`page.tsx`](../src/app/page.tsx) — Upgraded the cloud save badge into an interactive, globally visible button (`AWS ☁️ Saved` / `AWS Saving...`) that immediately pushes snapshots to Amazon S3 (`ap-southeast-2`) upon generation and provides 1-click manual cloud save with shareable URL copying.
+  * **Header Responsive Polish**: Streamlined default spreadsheet names to short form ("Sheet 1", "Sheet 2"), removed text collisions between search bar and title, and guaranteed generous central prominence for the AI prompt input across all screen sizes and sidebar states.
+  * **Verification**: `npx tsc --noEmit` → 0 errors. `npm run test:formulas` → 5/5 test suites passed. Production build clean (exit code 0).
 

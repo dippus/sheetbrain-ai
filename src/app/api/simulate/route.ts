@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { invokeBedrockAgent } from '@/lib/aws/bedrock';
 import { SheetColumn, SheetCell } from '@/types/sheet';
 import { logCloudWatchMetric } from '@/lib/aws/cloudwatch';
+import { detectMetricPolarity } from '@/lib/engine/scenarioEngine';
 
 interface SimulationDelta {
   cell: string;
@@ -146,12 +147,16 @@ Return strict JSON:
       metadata: { targetColumn: colKey, deltaCount: deltas.length },
     });
 
+    const polarity = detectMetricPolarity(targetCol?.label || '');
+    const isUnfavorable = polarity === 'negative' ? isIncrease : !isIncrease;
+    const severity = isUnfavorable ? (pct >= 25 ? 'critical' : 'warning') : 'normal';
+
     return NextResponse.json({
       success: true,
       simulation: {
         scenario: hypothesis || `Adjust ${targetCol?.label || colKey} by ${deltaPercentStr}`,
         summary: `Adjusted all ${deltas.length} horizon periods for ${targetCol?.label || `Column ${colKey}`} by ${deltaPercentStr} dynamically.`,
-        severity: isIncrease ? 'normal' : 'warning',
+        severity,
         targetColKey: colKey,
         multiplier: mult,
         deltas,

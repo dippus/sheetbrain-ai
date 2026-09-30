@@ -4,7 +4,7 @@ import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
 export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
   blank_sheet: {
     id: 'blank_sheet',
-    title: 'Untitled Spreadsheet',
+    title: 'Sheet 1',
     description: 'Pristine, clean spreadsheet ready for real data entry, calculations, and formulas.',
     category: 'Workspace',
     chartConfig: {

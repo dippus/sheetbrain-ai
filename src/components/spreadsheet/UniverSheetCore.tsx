@@ -141,6 +141,8 @@ export default function UniverSheetCore({
   const isInternalChangeRef = useRef<boolean>(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sheetRef = useRef<SheetData>(sheet);
+  // Track the sheet ID at mount time so the unmount cleanup knows if the workbook changed
+  const mountedSheetIdRef = useRef<string>(sheet.id);
 
   sheetRef.current = sheet;
 
@@ -171,9 +173,18 @@ export default function UniverSheetCore({
           const coord = `${colLetter}${rowNum}`;
 
           if (cellObj && (cellObj.v !== undefined || cellObj.f)) {
+            const existingCell = sheetRef.current.cellData?.[coord];
+            let cellFormula = cellObj.f;
+            if (!cellFormula && typeof cellObj.v === 'string' && cellObj.v.startsWith('=')) {
+              cellFormula = cellObj.v;
+            }
+            if (!cellFormula && existingCell?.f) {
+              cellFormula = existingCell.f;
+            }
+
             updatedCellData[coord] = {
               v: cellObj.v,
-              f: cellObj.f,
+              f: cellFormula,
               bold: !!cellObj.s?.bl,
             };
           }
@@ -241,6 +252,9 @@ export default function UniverSheetCore({
   useEffect(() => {
     const host = containerRef.current;
     if (!host) return;
+
+    // Snapshot the sheet ID at the moment this Univer instance mounts
+    mountedSheetIdRef.current = sheetRef.current.id;
 
     let destroyed = false;
     let localUniver: { dispose: () => void } | null = null;
@@ -314,19 +328,21 @@ export default function UniverSheetCore({
       fWorkbook.onCommandExecuted((command: { id?: string }) => {
         if (destroyed || isInternalChangeRef.current) return;
 
-        // Skip non-mutation commands (selections, cursor moves, focus, hover, scroll)
+        // Skip ONLY pure UI/navigation commands that never mutate cell data
+        // IMPORTANT: Do NOT filter 'operation' - that blocks undo/redo!
         const cmdId = String(command?.id || '').toLowerCase();
-        if (
-          cmdId.includes('selection') ||
-          cmdId.includes('operation') ||
+        const isNonMutation =
+          (cmdId.includes('selection') && !cmdId.includes('set')) ||
           cmdId.includes('focus') ||
           cmdId.includes('hover') ||
-          cmdId.includes('scroll')
-        ) {
-          return;
-        }
+          cmdId.includes('scroll') ||
+          cmdId === 'sheet.command.set-zoom-ratio';
+
+        if (isNonMutation) return;
 
         // Debounce cell change sync to prevent re-render thrashing during typing
+        // Use faster sync (150ms) for undo/redo to feel snappy
+        const isUndoRedo = cmdId.includes('undo') || cmdId.includes('redo');
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
@@ -334,7 +350,7 @@ export default function UniverSheetCore({
         debounceTimerRef.current = setTimeout(() => {
           if (destroyed) return;
           extractAndSyncSheet(fWorkbook);
-        }, 200);
+        }, isUndoRedo ? 80 : 200);
       });
     } catch (err) {
       console.warn('Univer initialization fallback:', err);
@@ -345,12 +361,10 @@ export default function UniverSheetCore({
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
-      // Guarantee final cell edit is saved before unmounting
-      if (localWorkbook) {
-        try {
-          extractAndSyncSheet(localWorkbook);
-        } catch {}
-      }
+      // NOTE: Do not sync localWorkbook back to React on unmount.
+      // During unmount, localWorkbook contains older canvas state which would overwrite
+      // incoming changes (such as Sort A-Z, Clear Cells, Template Selection, or AI Generation).
+      // Active user edits are already safely debounced and synced via onCommandExecuted.
       queueMicrotask(() => {
         if (localUniver) {
           try {

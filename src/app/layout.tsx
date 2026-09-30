@@ -15,8 +15,8 @@ export const metadata: Metadata = {
     title: "SheetBrain AI Workspace",
     description: "Autonomous multi-agent spreadsheet intelligence workspace.",
   },
-  title: 'SheetBrain Studio — Desktop Spreadsheet & Model Engine',
-  description: 'Production desktop spreadsheet workspace with reactive formula engine, real local datasets, and scenario analysis.',
+  title: 'SheetBrain AI — Autonomous Spreadsheet Intelligence & Model Engine',
+  description: 'Enterprise spreadsheet workspace with deterministic formula engine, multi-agent AI synthesis, and What-If scenario simulations.',
 };
 
 export default function RootLayout({

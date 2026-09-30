@@ -107,18 +107,21 @@ export default function FormulaAuditor({ sheet, onApplyFix, onSelectCell }: Form
           numericCellCount++;
         }
 
-        // Detect hardcoded summary rows (e.g., Row labeled "Total" but has static number instead of =SUM)
+        // Detect hardcoded summary rows (e.g., Row labeled "Total" or "Subtotal", excluding metric names like "Total Addressable Market")
         const rowLabelCell = cellMap[`A${r}`]?.v;
-        const isTotalRow = typeof rowLabelCell === 'string' && /total|sum|aggregate|subtotal/i.test(rowLabelCell);
+        const isTotalRow = typeof rowLabelCell === 'string' &&
+          /^(total(\s+(revenue|cost|costs|expense|expenses|opex|capex|profit|margin|burn|cash))?|grand total|subtotal|sum)$/i.test(rowLabelCell.trim());
 
-        if (isTotalRow && colKey !== 'A' && typeof cell.v === 'number' && !cell.f) {
+        const hasFormula = !!cell.f || (typeof cell.v === 'string' && cell.v.trim().startsWith('='));
+
+        if (isTotalRow && colKey !== 'A' && typeof cell.v === 'number' && !hasFormula && r > 2) {
           const suggestedFormula = `=SUM(${colKey}2:${colKey}${r - 1})`;
           issues.push({
             id: `hardcoded_${coord}`,
             type: 'warning',
             cellCoord: coord,
             category: 'Hardcoded Total',
-            message: `Cell has hardcoded number (${cell.v}) on a summary row without dynamic formula.`,
+            message: `Cell has static constant (${cell.v}) on summary row "${rowLabelCell}" without reactive formula.`,
             suggestion: `Convert to ${suggestedFormula} for reactive recalculation.`,
             actionFormula: suggestedFormula,
           });

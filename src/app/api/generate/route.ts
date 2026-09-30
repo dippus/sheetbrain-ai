@@ -4,6 +4,7 @@ import { GOLDEN_TEMPLATES } from '@/lib/templates/goldenTemplates';
 import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
 import { WorkbookModel, SheetColumn, SheetCell, ChartConfig } from '@/types/sheet';
 import { logCloudWatchMetric } from '@/lib/aws/cloudwatch';
+import { synthesizeSpreadsheetFromPrompt } from '@/lib/engine/promptSpreadsheetSynthesizer';
 
 interface BedrockGeneratePayload {
   title?: string;
@@ -22,6 +23,15 @@ export async function POST(req: NextRequest) {
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+    }
+
+    const GREETINGS = ['hello', 'hi', 'hey', 'hii', 'helloo', 'good morning', 'good evening', 'test', 'testing', 'asdf', 'ok', 'okay', 'bye'];
+    const pClean = prompt.trim().toLowerCase();
+    if (GREETINGS.includes(pClean) || pClean.length < 4) {
+      return NextResponse.json({
+        success: false,
+        error: "Please enter a specific spreadsheet prompt (e.g. '12-Month SaaS Financial Runway', 'Employee Payroll Register', 'Hospital Patient Billing').",
+      }, { status: 400 });
     }
 
     // Agent 1 & 2 System Prompt Contract (Schema Architect + Formula Compiler)
@@ -101,37 +111,22 @@ Rules:
       });
     }
 
-    // Smart Zero-Blank-Sheet Fallback Engine (Guarantees living, formula-driven model on any prompt)
-    let baseTemplate = GOLDEN_TEMPLATES['saas_runway'];
-    const pLower = prompt.toLowerCase();
-    if (pLower.includes('git') || pLower.includes('commit') || pLower.includes('velocity') || pLower.includes('code')) {
-      baseTemplate = GOLDEN_TEMPLATES['git_commits'];
-    } else if (pLower.includes('dep') || pLower.includes('package') || pLower.includes('npm') || pLower.includes('dependenc')) {
-      baseTemplate = GOLDEN_TEMPLATES['project_dependencies'];
-    } else if (pLower.includes('sale') || pLower.includes('pipeline') || pLower.includes('quota') || pLower.includes('deal') || pLower.includes('commission')) {
-      baseTemplate = GOLDEN_TEMPLATES['sales_pipeline'];
-    } else {
-      baseTemplate = GOLDEN_TEMPLATES['saas_runway'];
-    }
-
+    // Intelligent Dynamic Semantic Synthesizer (Tailored to ANY user prompt: student, exam, fitness, inventory, tasks, etc.)
+    const synthesizedWb = synthesizeSpreadsheetFromPrompt(prompt);
     const elapsed = Date.now() - startTime;
+
     logCloudWatchMetric({
       operation: 'GenerateWorkbook',
       latencyMs: elapsed,
       status: 'SUCCESS',
       isFallback: true,
-      metadata: { templateKey: baseTemplate.id },
+      metadata: { synthesizedTitle: synthesizedWb.title },
     });
 
     return NextResponse.json({
       success: true,
-      workbook: {
-        ...baseTemplate,
-        id: `wb_${Date.now()}`,
-        title: prompt ? `${prompt.slice(0, 48)}` : baseTemplate.title,
-        description: prompt || baseTemplate.description,
-      },
-      source: 'local_engine',
+      workbook: synthesizedWb,
+      source: 'semantic_synthesizer',
       latencyMs: bedrockResult.latencyMs || elapsed,
     });
   } catch (err: unknown) {

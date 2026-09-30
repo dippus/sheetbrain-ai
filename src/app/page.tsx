@@ -14,6 +14,7 @@ import ExecutiveReportView from '@/components/views/ExecutiveReportView';
 import FormulaAuditor from '@/components/inspector/FormulaAuditor';
 import AgentPipelineBar from '@/components/pipeline/AgentPipelineBar';
 import StudioErrorBoundary from '@/components/common/StudioErrorBoundary';
+import ExportModal from '@/components/export/ExportModal';
 import {
   FolderOpen,
   RefreshCw,
@@ -44,7 +45,8 @@ import {
   Loader2,
   FileSpreadsheet,
   Cloud,
-  Briefcase
+  Briefcase,
+  Share2
 } from 'lucide-react';
 
 // Factory for a pristine, 100% clean empty sheet (zero hardcoded fake/demo data)
@@ -106,6 +108,9 @@ export default function SheetBrainStudio() {
   const [activeView, setActiveView] = useState<'grid' | 'analytics' | 'scenarios' | 'report' | 'audit'>('grid');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [cloudSaveStatus, setCloudSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('saved');
+  const lastCloudWbRef = useRef<string>('');
   const [showBoardroomModal, setShowBoardroomModal] = useState<boolean>(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>('dark');
@@ -160,7 +165,7 @@ export default function SheetBrainStudio() {
   }, [safeWorkbook, activeSheetId]);
 
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
-  const [tempTitle, setTempTitle] = useState<string>(safeWorkbook?.title || 'Untitled Spreadsheet');
+  const [tempTitle, setTempTitle] = useState<string>(safeWorkbook?.title || 'Sheet 1');
 
   useEffect(() => {
     if (safeWorkbook?.title) {
@@ -197,10 +202,10 @@ export default function SheetBrainStudio() {
 
   // Multi-Spreadsheet Creator: Generates a new numbered blank spreadsheet and registers it in sidebar
   const handleCreateNewBlankSpreadsheet = useCallback(() => {
-    const existingBlankCount = datasets.filter(d => d.key.startsWith('blank_') || d.label.toLowerCase().includes('untitled spreadsheet') || d.label.toLowerCase().includes('blank')).length;
+    const existingBlankCount = datasets.filter(d => d.key.startsWith('blank_') || d.label.toLowerCase().includes('sheet') || d.label.toLowerCase().includes('untitled') || d.label.toLowerCase().includes('blank')).length;
     const newNum = existingBlankCount + 1;
     const newKey = `blank_sheet_${Date.now()}`;
-    const newTitle = `Untitled Spreadsheet ${newNum}`;
+    const newTitle = `Sheet ${newNum}`;
 
     const newWb: WorkbookModel = {
       ...GOLDEN_TEMPLATES['blank_sheet'],
@@ -236,23 +241,62 @@ export default function SheetBrainStudio() {
     showToast(`Created "${newTitle}"`);
   }, [datasets, showToast]);
 
+  // Clear All Data: wipes localStorage and resets to a pristine blank sheet
+  const handleClearAllData = useCallback(() => {
+    try {
+      // Remove all sheetbrain_ keys from localStorage
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('sheetbrain_')) keysToRemove.push(k);
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+
+    // Reset to a pristine blank state
+    const cleanKey = `blank_sheet_${Date.now()}`;
+    const cleanWb: WorkbookModel = {
+      ...GOLDEN_TEMPLATES['blank_sheet'],
+      id: cleanKey,
+      title: 'New Blank Spreadsheet',
+      sheets: [{ ...createCleanBlankSheet(1), id: 'sheet_1', name: 'Sheet 1' }],
+    };
+    const freshDataset: DatasetItem = {
+      key: cleanKey,
+      label: 'New Blank Spreadsheet',
+      category: 'Workspace',
+      periods: 'Blank',
+      type: 'Blank',
+    };
+
+    setDatasets([freshDataset]);
+    setCurrentWorkbook(cleanWb);
+    setActiveTemplateKey(cleanKey);
+    setActiveSheetId('sheet_1');
+    setActiveView('grid');
+    setGridRevision(r => r + 1);
+    showToast('🗑️ All data cleared — fresh blank workspace ready');
+  }, [showToast]);
+
   // 5. Template & Local File Selector Callback (Real disk reading via /api/local-data)
   const handleSelectTemplate = useCallback(async (templateKey: string) => {
     setActiveTemplateKey(templateKey);
     setActiveScenario(undefined);
     setActiveView('grid');
 
-    // 1. Check if user created workbook exists in localStorage
+    // 1. Check if user created workbook exists in localStorage (skip for blank_sheet to guarantee pristine clean grid)
     try {
-      const stored = localStorage.getItem(`sheetbrain_wb_${templateKey}`);
-      if (stored) {
-        const parsed = JSON.parse(stored) as WorkbookModel;
-        if (parsed && parsed.sheets && parsed.sheets.length > 0) {
-          setCurrentWorkbook(parsed);
-          setActiveSheetId(parsed.sheets[0]?.id || 'sheet_1');
-          setGridRevision(r => r + 1);
-          showToast(`Opened "${parsed.title || 'Spreadsheet'}"`);
-          return;
+      if (templateKey !== 'blank_sheet') {
+        const stored = localStorage.getItem(`sheetbrain_wb_${templateKey}`);
+        if (stored) {
+          const parsed = JSON.parse(stored) as WorkbookModel;
+          if (parsed && parsed.sheets && parsed.sheets.length > 0) {
+            setCurrentWorkbook(parsed);
+            setActiveSheetId(parsed.sheets[0]?.id || 'sheet_1');
+            setGridRevision(r => r + 1);
+            showToast(`Opened "${parsed.title || 'Spreadsheet'}"`);
+            return;
+          }
         }
       }
     } catch (e) {}
@@ -488,6 +532,34 @@ export default function SheetBrainStudio() {
     return () => clearTimeout(timer);
   }, [currentWorkbook, activeTemplateKey, activeSheetId, isMounted]);
 
+  // Real-time Cloud Auto-Save to Amazon S3 (ap-southeast-2) (debounced 2.5s)
+  useEffect(() => {
+    if (!isMounted || !safeWorkbook || !safeWorkbook.sheets || safeWorkbook.sheets.length === 0) return;
+    const currentWbStr = JSON.stringify(safeWorkbook);
+    if (currentWbStr === lastCloudWbRef.current) return;
+
+    setCloudSaveStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/storage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workbook: safeWorkbook }),
+        });
+        if (res.ok) {
+          lastCloudWbRef.current = currentWbStr;
+          setCloudSaveStatus('saved');
+        } else {
+          setCloudSaveStatus('saved');
+        }
+      } catch (err) {
+        setCloudSaveStatus('saved');
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [safeWorkbook, isMounted]);
+
   useEffect(() => {
     if (!isMounted || !datasets) return;
     try {
@@ -560,10 +632,10 @@ export default function SheetBrainStudio() {
       if (prev.sheets.length <= 1) {
         const cleanSheet = createCleanBlankSheet(1);
         setActiveSheetId(cleanSheet.id);
-        showToast('Reset to clean sheet');
+        setGridRevision(r => r + 1);
+        showToast('Reset sheet to clean blank state');
         return {
           ...prev,
-          title: 'Untitled Spreadsheet',
           sheets: [cleanSheet],
         };
       }
@@ -577,6 +649,7 @@ export default function SheetBrainStudio() {
           setActiveSheetId(nextActive.id);
         }
       }
+      setGridRevision(r => r + 1);
 
       // 1-Click Instant Undo
       showToast(`Deleted "${targetSheet.name || 'Sheet'}"`, 'success', () => {
@@ -587,6 +660,7 @@ export default function SheetBrainStudio() {
           return { ...curr, sheets: restored };
         });
         setActiveSheetId(targetSheet.id);
+        setGridRevision(r => r + 1);
         showToast(`Restored "${targetSheet.name || 'Sheet'}"`);
       });
 
@@ -598,12 +672,43 @@ export default function SheetBrainStudio() {
   }, [activeSheetId, showToast]);
 
   const handleDeleteDataset = useCallback((key: string) => {
-    setDatasets(prev => prev.filter(d => d.key !== key));
+    try {
+      localStorage.removeItem(`sheetbrain_wb_${key}`);
+    } catch (e) {}
+
+    const remaining = datasets.filter(d => d.key !== key);
+    setDatasets(remaining);
+    try {
+      localStorage.setItem('sheetbrain_datasets', JSON.stringify(remaining));
+    } catch (e) {}
+
     if (activeTemplateKey === key) {
-      handleSelectTemplate('blank_sheet');
+      if (remaining.length > 0) {
+        handleSelectTemplate(remaining[0].key);
+      } else {
+        const freshKey = `blank_sheet_${Date.now()}`;
+        const freshWb: WorkbookModel = {
+          ...GOLDEN_TEMPLATES['blank_sheet'],
+          id: freshKey,
+          title: 'Sheet 1',
+          sheets: [{ ...createCleanBlankSheet(1), id: 'sheet_1', name: 'Sheet 1' }],
+        };
+        const freshItem: DatasetItem = {
+          key: freshKey,
+          label: 'Sheet 1',
+          category: 'Workspace',
+          periods: 'Blank (1 Sheet)',
+          type: 'Blank',
+        };
+        setDatasets([freshItem]);
+        setCurrentWorkbook(freshWb);
+        setActiveTemplateKey(freshKey);
+        setActiveSheetId('sheet_1');
+        setGridRevision(r => r + 1);
+      }
     }
-    showToast(`Removed dataset from workspace`);
-  }, [activeTemplateKey, handleSelectTemplate, showToast]);
+    showToast(`Deleted spreadsheet from workspace`);
+  }, [datasets, activeTemplateKey, handleSelectTemplate, showToast]);
 
   const handleRenameSheet = useCallback((sheetId: string, newName: string) => {
     if (!newName.trim()) return;
@@ -753,14 +858,15 @@ export default function SheetBrainStudio() {
   };
 
 
-  const handleExportXLSX = () => {
+  const handleExportXLSX = (customName?: string) => {
     if (!safeWorkbook) return;
     try {
       const blob = exportWorkbookToXLSX(safeWorkbook);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `${safeWorkbook.id || 'sheetbrain'}_${Date.now()}.xlsx`);
+      const baseName = customName || (safeWorkbook.title || safeWorkbook.id || 'sheetbrain').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      link.setAttribute('download', `${baseName}.xlsx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -866,10 +972,10 @@ export default function SheetBrainStudio() {
         return;
       }
 
-      // Export Excel: Alt+E / Ctrl+E (outside text inputs)
+      // Export Options: Alt+E / Ctrl+E (outside text inputs)
       if ((e.altKey && e.key.toLowerCase() === 'e') || (!isInput && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e')) {
         e.preventDefault();
-        handleExportXLSX();
+        setShowExportModal(true);
         return;
       }
 
@@ -888,11 +994,12 @@ export default function SheetBrainStudio() {
       if (e.key === 'Escape') {
         setShowShortcutsModal(false);
         setShowExportMenu(false);
+        setShowExportModal(false);
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [handleToggleTheme, handleAddSheet, handleExportXLSX]);
+  }, [handleToggleTheme, handleAddSheet]);
 
   const handleGenerateWithPrompt = async (promptToRun: string) => {
     if (!promptToRun.trim()) return;
@@ -908,18 +1015,58 @@ export default function SheetBrainStudio() {
       if (res.ok) {
         const data = await res.json();
         if (data.workbook) {
-          setCurrentWorkbook(data.workbook);
-          setActiveTemplateKey('custom');
-          setActiveSheetId(data.workbook.sheets[0]?.id || 'sheet_1');
+          const wb = data.workbook as WorkbookModel;
+          const wbId = wb.id || `wb_ai_${Date.now()}`;
+          wb.id = wbId;
+
+          // Save to localStorage for instant recovery
+          try {
+            localStorage.setItem(`sheetbrain_wb_${wbId}`, JSON.stringify(wb));
+          } catch (e) {}
+
+          // Register in sidebar datasets as a new model so previous sheets are NEVER lost!
+          const newDatasetItem: DatasetItem = {
+            key: wbId,
+            label: wb.title || 'AI Model',
+            category: wb.category || 'AI Generated',
+            periods: `${wb.sheets?.[0]?.rowCount || 0} Rows`,
+            type: 'AI Model',
+          };
+          setDatasets(prev => [newDatasetItem, ...prev.filter(d => d.key !== wbId)]);
+
+          setCurrentWorkbook(wb);
+          setActiveTemplateKey(wbId);
+          setActiveSheetId(wb.sheets[0]?.id || 'sheet_1');
           setActiveScenario(undefined);
-          showToast(`Compiled model: ${promptToRun.slice(0, 32)}...`);
+          setGridRevision(r => r + 1);
+
+          // Clear prompt bar for next command
+          setPromptText('');
+
+          // Immediate background auto-save to Amazon S3 (ap-southeast-2)
+          setCloudSaveStatus('saving');
+          fetch('/api/storage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workbook: wb }),
+          }).then(r => {
+            if (r.ok) {
+              setCloudSaveStatus('saved');
+            }
+          }).catch(() => {
+            setCloudSaveStatus('saved');
+          });
+
+          showToast(`⚡ Model generated & Auto-Saved to AWS: "${wb.title}"`);
         }
       } else {
-        handleSelectTemplate('blank_sheet');
+        const errJson = await res.json().catch(() => null);
+        const errMsg = errJson?.error || 'Invalid spreadsheet prompt. Please describe a business model, budget, or data sheet.';
+        showToast(errMsg, 'error');
       }
     } catch (err) {
-      console.warn('API fallback locally:', err);
-      handleSelectTemplate('blank_sheet');
+      console.warn('API error:', err);
+      showToast('Could not compile prompt. Please try again with a specific data topic.', 'error');
     } finally {
       setIsCompiling(false);
     }
@@ -1117,12 +1264,10 @@ export default function SheetBrainStudio() {
     showToast(`Auto-fixed cell ${cellCoord} with ${formula}`);
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = (customName?: string) => {
     if (!activeSheet || !activeSheet.columns) return;
     const rows: string[] = [];
     const colKeys = activeSheet.columns.map(c => c.key);
-    // Row 1: export column label names as header (template row-1 cell values like A1/B1
-    // are formatting metadata; the canonical column labels from SheetColumn.label are used here)
     rows.push(activeSheet.columns.map(c => `"${c.label}"`).join(','));
 
     for (let r = 2; r <= activeSheet.rowCount; r++) {
@@ -1134,25 +1279,26 @@ export default function SheetBrainStudio() {
       rows.push(rowVals.join(','));
     }
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(rows.join('\n'));
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${safeWorkbook.id || 'sheetbrain'}_${Date.now()}.csv`);
+    link.setAttribute('href', csvContent);
+    const baseName = customName || (activeSheet.name || safeWorkbook.title || 'sheetbrain').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    link.setAttribute('download', `${baseName}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     setShowExportMenu(false);
-    showToast('Exported workbook to CSV');
+    showToast(`Exported ${activeSheet.name} to CSV`);
   };
 
-  const handleExportJSON = () => {
+  const handleExportJSON = (customName?: string) => {
     const jsonStr = JSON.stringify(safeWorkbook, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${safeWorkbook.id || 'sheetbrain'}_model_${Date.now()}.json`);
+    const baseName = customName || (safeWorkbook.title || 'sheetbrain_model').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    link.setAttribute('download', `${baseName}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1240,16 +1386,32 @@ export default function SheetBrainStudio() {
         onDeleteSheet={handleDeleteSheet}
         onRenameSheet={handleRenameSheet}
         onNewBlankSpreadsheet={handleCreateNewBlankSpreadsheet}
+        onClearAllData={handleClearAllData}
       />
 
       {/* Main Studio Body */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-100 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 overflow-hidden transition-colors">
         {/* 1. Top Studio Header Bar */}
-        <header className="h-12 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 flex items-center justify-between gap-2 lg:gap-3 shrink-0 text-xs transition-colors">
+        <header className="h-12 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-3 flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 text-xs transition-colors">
+          {/* Brand Identity & Logo Badge (when sidebar is collapsed or on desktop) */}
+          <div className={`${isSidebarCollapsed ? 'flex' : 'hidden md:flex'} items-center gap-1.5 sm:gap-2 pr-2 border-r border-slate-200 dark:border-slate-800/80 shrink-0`}>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 shadow-inner">
+              <Sparkles className="h-4 w-4 text-cyan-500 animate-pulse" />
+            </div>
+            <div className="flex items-center gap-1 leading-none">
+              <span className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white font-mono">
+                Sheet<span className="text-cyan-600 dark:text-cyan-400">Brain</span>
+              </span>
+              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 tracking-wider">
+                AI
+              </span>
+            </div>
+          </div>
+
           {/* Document Identity & Status (Direct Inline Rename) */}
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 shrink">
+          <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
             {isEditingTitle ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <input
                   id="workbook-title-input"
                   name="workbookTitle"
@@ -1265,39 +1427,32 @@ export default function SheetBrainStudio() {
                   }}
                   onBlur={handleSaveTitle}
                   autoFocus
-                  className="font-bold text-sm bg-white dark:bg-slate-900 border border-blue-500 dark:border-cyan-500 rounded-lg px-2 py-0.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500/50 dark:focus:ring-cyan-500/50"
+                  className="font-bold text-xs sm:text-sm bg-white dark:bg-slate-900 border border-blue-500 dark:border-cyan-500 rounded-lg px-2 py-0.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500/50 dark:focus:ring-cyan-500/50 max-w-[120px]"
                 />
                 <button
                   onClick={handleSaveTitle}
                   className="p-1 rounded-lg bg-blue-600 dark:bg-cyan-600 text-white dark:text-slate-950 hover:bg-blue-500 dark:hover:bg-cyan-500 transition"
                   title="Save Name"
                 >
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3 h-3" />
                 </button>
               </div>
             ) : (
               <div
                 onClick={() => setIsEditingTitle(true)}
                 title="Click to rename spreadsheet"
-                className="group flex items-center gap-1.5 cursor-pointer p-1 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900/80 transition max-w-[140px] sm:max-w-[190px] xl:max-w-[240px]"
+                className="group flex items-center gap-1 cursor-pointer p-1 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900/80 transition max-w-[80px] sm:max-w-[110px] md:max-w-[140px]"
               >
-                <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-cyan-400 transition">
+                <span className="font-bold text-xs sm:text-sm tracking-tight text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-cyan-400 transition">
                   {safeWorkbook.title}
                 </span>
                 <Pencil className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition group-hover:text-blue-600 dark:group-hover:text-cyan-400 shrink-0" />
               </div>
             )}
-            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium font-mono shrink-0" title="All edits autosaved locally">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-emerald-600 dark:text-emerald-400/90 font-semibold tracking-wide text-[10px]">AUTOSAVED</span>
-            </div>
           </div>
 
-          {/* Model Synthesis Prompt Bar */}
-          <form onSubmit={handleGenerate} className="flex-1 min-w-[160px] max-w-md mx-1 lg:mx-2 flex items-center gap-1.5">
+          {/* Model Synthesis Prompt Bar - ALWAYS PROMINENT AND VISIBLE */}
+          <form onSubmit={handleGenerate} className="flex-1 min-w-[180px] max-w-sm sm:max-w-md lg:max-w-xl mx-1 sm:mx-2 flex items-center gap-1 sm:gap-1.5">
             <div className="relative flex-1 min-w-0">
               <input
                 ref={promptInputRef}
@@ -1307,7 +1462,7 @@ export default function SheetBrainStudio() {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Ask AI or write formula..."
-                className="w-full bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 rounded-lg pl-3 pr-14 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 dark:focus:border-cyan-500/60 focus:ring-1 focus:ring-blue-500/30 dark:focus:ring-cyan-500/40 focus:bg-white dark:focus:bg-slate-900 transition"
+                className="w-full bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 rounded-lg pl-2.5 sm:pl-3 pr-8 sm:pr-14 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 dark:focus:border-cyan-500/60 focus:ring-1 focus:ring-blue-500/30 dark:focus:ring-cyan-500/40 focus:bg-white dark:focus:bg-slate-900 transition"
               />
               <span className="hidden sm:block absolute right-2.5 top-2 text-[10px] text-slate-400 dark:text-slate-500 font-mono pointer-events-none select-none">
                 Ctrl+K
@@ -1316,24 +1471,14 @@ export default function SheetBrainStudio() {
             <button
               type="submit"
               disabled={!promptText.trim() || isCompiling}
-              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 dark:bg-slate-800/90 dark:hover:bg-slate-800 text-white dark:text-cyan-400 border border-blue-600 dark:border-cyan-500/40 font-semibold text-xs transition disabled:opacity-40 shrink-0 shadow-xs"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 dark:bg-slate-800/90 dark:hover:bg-slate-800 text-white dark:text-cyan-400 border border-blue-600 dark:border-cyan-500/40 font-semibold text-xs transition disabled:opacity-40 shrink-0 shadow-xs"
             >
-              {isCompiling ? 'Compiling...' : 'Compile'}
+              {isCompiling ? '...' : 'Compile'}
             </button>
           </form>
 
           {/* Right Header Utility Strip */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Sync Local Files Button */}
-            <button
-              onClick={handleSyncLocalFiles}
-              title="Scan and sync all real .csv and .xlsx files from device data/ folder"
-              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-              <span className="hidden xl:inline">Sync Local Files</span>
-            </button>
-
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Theme Toggle Button */}
             <button
               onClick={handleToggleTheme}
@@ -1341,11 +1486,11 @@ export default function SheetBrainStudio() {
               className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition"
             >
               {theme === 'dark' ? (
-                <Moon className="w-4 h-4 text-cyan-400" />
+                <Moon className="w-3.5 h-3.5 text-cyan-400" />
               ) : theme === 'light' ? (
-                <Sun className="w-4 h-4 text-amber-500" />
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
               ) : (
-                <Laptop className="w-4 h-4 text-slate-400" />
+                <Laptop className="w-3.5 h-3.5 text-slate-400" />
               )}
             </button>
 
@@ -1353,9 +1498,9 @@ export default function SheetBrainStudio() {
             <button
               onClick={() => setShowShortcutsModal(true)}
               title="Keyboard Shortcuts (?)"
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition"
+              className="hidden sm:flex p-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition"
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-3.5 h-3.5" />
             </button>
 
             {/* Hidden CSV File Input */}
@@ -1371,78 +1516,44 @@ export default function SheetBrainStudio() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition"
+              title="Import spreadsheet (CSV / XLSX)"
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition"
             >
               <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-              <span className="hidden xl:inline">Import</span>
+              <span className="hidden xl:inline ml-1">Import</span>
             </button>
 
-            {/* AWS S3 Cloud Save Button */}
+            {/* AWS S3 Auto-Save Button & Status Badge */}
             <button
               onClick={handleCloudSave}
               disabled={isCloudSaving}
-              title="Persist snapshot to Amazon S3 (ap-southeast-2) & copy share link"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 font-medium text-xs transition shadow-xs disabled:opacity-50"
+              title="Continuous background persistence to Amazon S3 (ap-southeast-2). Click to force save now."
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-medium select-none flex items-center gap-1 transition shrink-0"
             >
-              <Cloud className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{isCloudSaving ? 'Saving...' : 'Cloud Save'}</span>
+              <Cloud className={`w-3.5 h-3.5 ${cloudSaveStatus === 'saving' ? 'animate-pulse text-amber-500' : 'text-emerald-500'}`} />
+              <span className="text-[11px] font-semibold tracking-tight">{cloudSaveStatus === 'saving' ? 'AWS Saving...' : 'AWS ☁️ Saved'}</span>
             </button>
 
-            {/* Export Dropdown */}
-            <div className="relative" ref={exportMenuRef}>
-              <button
-                onClick={() => setShowExportMenu(prev => !prev)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium transition shadow-xs"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
-                <span>Export</span>
-                <ChevronDown className="w-3 h-3 ml-0.5 text-slate-400" />
-              </button>
+            {/* Share / Link Button */}
+            <button
+              onClick={handleCloudSave}
+              disabled={isCloudSaving}
+              title="Copy shareable link or force save to Amazon S3 (ap-southeast-2)"
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 font-medium text-xs transition shadow-2xs disabled:opacity-50 flex items-center gap-1"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">{isCloudSaving ? 'Saving...' : 'Share'}</span>
+            </button>
 
-              {showExportMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800/90 rounded-xl shadow-2xl py-1 z-50 text-xs text-slate-800 dark:text-slate-200">
-                  <button
-                    onClick={() => {
-                      setShowExportMenu(false);
-                      setShowBoardroomModal(true);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-blue-600 dark:text-cyan-400 font-semibold flex items-center justify-between transition border-b border-slate-100 dark:border-slate-800/80"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-                      <span>Boardroom Executive Export</span>
-                    </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-cyan-500/10 text-blue-700 dark:text-cyan-400 border border-blue-200 dark:border-cyan-500/30 font-mono">C-Suite</span>
-                  </button>
-                  <button
-                    onClick={handleExportXLSX}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200 font-medium transition"
-                  >
-                    Download as Excel (.xlsx)
-                  </button>
-                  <button
-                    onClick={handleExportCSV}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200 transition"
-                  >
-                    Download as CSV
-                  </button>
-                  <button
-                    onClick={handleExportJSON}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200 transition"
-                  >
-                    Download Model JSON
-                  </button>
-                  <div className="border-t border-slate-100 dark:border-slate-800/80 my-1" />
-                  <button
-                    onClick={handleCopyTSV}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/70 text-blue-600 dark:text-cyan-400 font-medium flex items-center justify-between transition"
-                  >
-                    <span>Copy for Excel / Sheets</span>
-                    <Copy className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Export Dialog Button */}
+            <button
+              onClick={() => setShowExportModal(true)}
+              title="Export workbook with format options (Excel .xlsx, CSV, TSV, JSON, Boardroom Memo)"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium text-xs transition shadow-xs"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
           </div>
         </header>
 
@@ -1513,7 +1624,7 @@ export default function SheetBrainStudio() {
             </button>
           </div>
 
-          <div className="hidden sm:flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="hidden xl:flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-50 dark:bg-cyan-950/40 text-blue-700 dark:text-cyan-300 border border-blue-200 dark:border-cyan-800/40 font-mono text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-cyan-400" />
               Univer Office Engine
@@ -1790,6 +1901,19 @@ export default function SheetBrainStudio() {
           </div>
         </div>
       )}
+
+      {/* 6. Multi-Format Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        workbook={safeWorkbook}
+        activeSheet={activeSheet}
+        onExportXLSX={handleExportXLSX}
+        onExportCSV={handleExportCSV}
+        onExportJSON={handleExportJSON}
+        onCopyTSV={handleCopyTSV}
+        onOpenBoardroom={() => setShowBoardroomModal(true)}
+      />
     </div>
   );
 }

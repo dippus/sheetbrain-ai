@@ -13,7 +13,8 @@ import {
   HardDrive,
   TableProperties,
   Layers,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { WorkbookModel } from '@/types/sheet';
 
@@ -41,6 +42,7 @@ interface WorkspaceSidebarProps {
   onDeleteSheet?: (sheetId: string) => void;
   onRenameSheet?: (sheetId: string, newName: string) => void;
   onNewBlankSpreadsheet?: () => void;
+  onClearAllData?: () => void;
 }
 
 export default function WorkspaceSidebar({
@@ -56,7 +58,10 @@ export default function WorkspaceSidebar({
   activeSheetId,
   onSelectSheet,
   onAddSheet,
+  onDeleteSheet,
+  onRenameSheet,
   onNewBlankSpreadsheet,
+  onClearAllData,
 }: WorkspaceSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -77,7 +82,7 @@ export default function WorkspaceSidebar({
   };
 
   const defaultDatasets: DatasetItem[] = [
-    { key: 'blank_sheet', label: 'Untitled Spreadsheet 1', category: 'Workspace', periods: 'Blank (1 Sheet)', type: 'Blank' },
+    { key: 'blank_sheet', label: 'Sheet 1', category: 'Workspace', periods: 'Blank (1 Sheet)', type: 'Blank' },
   ];
 
   const activeDatasets = datasets || defaultDatasets;
@@ -335,6 +340,24 @@ export default function WorkspaceSidebar({
                           </span>
                         )}
                       </button>
+                      {onDeleteSheet && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteSheet(s.id);
+                          }}
+                          aria-label={sheetsList.length > 1 ? `Delete ${s.name || `Sheet ${idx + 1}`}` : `Clear and reset sheet to blank`}
+                          title={sheetsList.length > 1 ? `Delete ${s.name || `Sheet ${idx + 1}`}` : `Clear and reset sheet to blank`}
+                          className={`mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md opacity-0 group-hover:opacity-100 text-[var(--cell-muted)] transition-opacity duration-150 ${sheetsList.length > 1 ? 'hover:bg-rose-500/10 hover:text-rose-500' : 'hover:bg-amber-500/10 hover:text-amber-500'} ${focusStyle}`}
+                        >
+                          {sheetsList.length > 1 ? (
+                            <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                          ) : (
+                            <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -450,6 +473,21 @@ export default function WorkspaceSidebar({
           <Upload aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="truncate">Import workbook (CSV / XLSX)</span>
         </button>
+        {onClearAllData && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Clear all saved data and start fresh? This cannot be undone.')) {
+                onClearAllData();
+              }
+            }}
+            title="Clear all saved workbook data and reset to blank state"
+            className={`flex min-h-9 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 transition-colors duration-150 hover:bg-red-100 dark:hover:bg-red-950/60 ${focusStyle}`}
+          >
+            <Trash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Clear All Data</span>
+          </button>
+        )}
       </footer>
     </aside>
   );

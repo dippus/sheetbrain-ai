@@ -130,6 +130,7 @@ export default function UniverSheetWrapper({
   const [sheetToDelete, setSheetToDelete] = useState<SheetData | null>(null);
   const [editingSheetId, setEditingSheetId] = useState<string | null>(null);
   const [tempSheetName, setTempSheetName] = useState<string>('');
+  const [wrapperRevision, setWrapperRevision] = useState<number>(0);
   const formulaMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -220,6 +221,7 @@ export default function UniverSheetWrapper({
 
   // 1. Add 25 empty rows to bottom
   const handleAdd25Rows = () => {
+    setWrapperRevision(r => r + 1);
     onCellChange({
       ...sheet,
       rowCount: (sheet.rowCount || 20) + 25,
@@ -236,6 +238,7 @@ export default function UniverSheetWrapper({
       type: 'number',
       width: 130,
     };
+    setWrapperRevision(r => r + 1);
     onCellChange({
       ...sheet,
       columnCount: (sheet.columnCount || currentCols.length) + 1,
@@ -269,6 +272,7 @@ export default function UniverSheetWrapper({
       };
     });
 
+    setWrapperRevision(r => r + 1);
     onCellChange({
       ...sheet,
       rowCount: summaryRowNum,
@@ -277,7 +281,7 @@ export default function UniverSheetWrapper({
     setShowFormulaMenu(false);
   };
 
-  // 4. Sort Rows by Column A (Ascending / Descending)
+  // 4. Sort Rows by Primary Column (Ascending / Descending Natural Sort)
   const handleSortByCol = (ascending: boolean) => {
     const totalRows = sheet.rowCount || 2;
     if (totalRows <= 2) return;
@@ -300,12 +304,20 @@ export default function UniverSheetWrapper({
     rowList.sort((a, b) => {
       const va = a.valA;
       const vb = b.valA;
-      if (typeof va === 'number' && typeof vb === 'number') {
-        return ascending ? va - vb : vb - va;
+      const strA = String(va ?? '').trim();
+      const strB = String(vb ?? '').trim();
+      const cleanA = strA.replace(/[^0-9.-]+/g, '');
+      const cleanB = strB.replace(/[^0-9.-]+/g, '');
+      const numA = typeof va === 'number' ? va : (cleanA !== '' && !isNaN(Number(cleanA)) ? Number(cleanA) : NaN);
+      const numB = typeof vb === 'number' ? vb : (cleanB !== '' && !isNaN(Number(cleanB)) ? Number(cleanB) : NaN);
+
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return ascending ? numA - numB : numB - numA;
       }
+
       return ascending
-        ? String(va).localeCompare(String(vb))
-        : String(vb).localeCompare(String(va));
+        ? strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' })
+        : strB.localeCompare(strA, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     // Reconstruct cellData
@@ -322,6 +334,7 @@ export default function UniverSheetWrapper({
       });
     });
 
+    setWrapperRevision(r => r + 1);
     onCellChange({
       ...sheet,
       cellData: updatedCellData,
@@ -544,14 +557,41 @@ export default function UniverSheetWrapper({
 
           <div className="h-4 w-px bg-slate-300 dark:bg-slate-800 mx-0.5 hidden sm:block" />
 
-          {/* Sort Buttons */}
+          {/* Sort Buttons (A-Z and Z-A) */}
+          <div className="hidden sm:flex items-center rounded-lg bg-slate-200/50 dark:bg-slate-800/50 p-0.5 border border-slate-300/60 dark:border-slate-700/60">
+            <button
+              onClick={() => handleSortByCol(true)}
+              title="Sort rows Ascending (A to Z / Low to High) by primary column"
+              className="px-2 py-0.5 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition flex items-center gap-1 active:scale-[0.98]"
+            >
+              <ArrowUpDown className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
+              <span>Sort A-Z</span>
+            </button>
+            <button
+              onClick={() => handleSortByCol(false)}
+              title="Sort rows Descending (Z to A / High to Low) by primary column"
+              className="px-1.5 py-0.5 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition flex items-center gap-1 active:scale-[0.98]"
+            >
+              <span>Z-A</span>
+            </button>
+          </div>
+
+          {/* Clear Sheet Cells */}
           <button
-            onClick={() => handleSortByCol(true)}
-            title="Sort rows A to Z by primary column"
-            className="px-2.5 py-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs transition hidden sm:flex items-center gap-1 active:scale-[0.98]"
+            onClick={() => {
+              if (window.confirm('Clear all cell data from current sheet? Columns and structure will be preserved.')) {
+                setWrapperRevision(r => r + 1);
+                onCellChange({
+                  ...sheet,
+                  cellData: {},
+                });
+              }
+            }}
+            title="Clear all cell data from current sheet without removing columns"
+            className="px-2.5 py-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 text-xs transition hidden sm:flex items-center gap-1 active:scale-[0.98]"
           >
-            <ArrowUpDown className="w-3 h-3" />
-            <span>Sort A-Z</span>
+            <RotateCcw className="w-3 h-3" />
+            <span>Clear Cells</span>
           </button>
 
           <div className="h-4 w-px bg-slate-300 dark:bg-slate-800 mx-0.5 hidden sm:block" />
@@ -581,7 +621,7 @@ export default function UniverSheetWrapper({
 
         {/* Right Stats & Keyboard Shortcut helper */}
         <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-          <span className="hidden md:inline tabular-nums">
+          <span className="hidden xl:inline tabular-nums">
             {sheet?.rowCount || 0} rows · {sheet?.columns?.length || 0} cols ({totalCells} cells)
           </span>
           <button
@@ -597,7 +637,7 @@ export default function UniverSheetWrapper({
       {/* 3. Univer Canvas Workspace */}
       <div className="flex-1 w-full h-full min-h-0 relative">
         <UniverSheetCore
-          key={`univer_${sheet.id}_${activeSheetId || 'default'}_${theme}_${activeScenario || 'base'}_${(sheets || [sheet]).map(s => `${s.id}_${s.rowCount}_${Object.keys(s.cellData || {}).length}`).join('__')}`}
+          key={`univer_${sheet.id}_${activeSheetId || 'default'}_${theme}_${activeScenario || 'base'}_rev${wrapperRevision}_${(sheets || [sheet]).map(s => `${s.id}_${s.rowCount}_${Object.keys(s.cellData || {}).length}`).join('__')}`}
           sheet={sheet}
           sheets={sheets}
           activeSheetId={activeSheetId}
@@ -821,6 +861,7 @@ export default function UniverSheetWrapper({
       {/* 6. Formula Explainer AI Modal */}
       <FormulaExplainerModal
         sheet={sheet}
+        sheets={sheets}
         isOpen={showFormulaExplainer}
         onClose={() => setShowFormulaExplainer(false)}
       />

@@ -38,11 +38,12 @@ export async function invokeBedrockAgent<T>({
 }: BedrockAgentInvokeOptions): Promise<{ data: T | null; error?: string; latencyMs: number }> {
   const startTime = Date.now();
 
-  // Check for credentials: API key or AWS IAM credentials
+  // Check for credentials: API key, Open-Source endpoints, or AWS IAM credentials
   const apiKey = process.env.AWS_BEARER_TOKEN_BEDROCK || process.env.AWS_BEDROCK_API_KEY;
   const hasIam = Boolean(process.env.AWS_ACCESS_KEY_ID || process.env.AWS_PROFILE || process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI);
+  const hasOpenSource = Boolean(process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OLLAMA_BASE_URL);
 
-  if (!apiKey && !hasIam) {
+  if (!apiKey && !hasIam && !hasOpenSource) {
     return { data: null, error: 'NO_CREDENTIALS', latencyMs: 0 };
   }
 
@@ -81,13 +82,84 @@ export async function invokeBedrockAgent<T>({
 
     let decoded = '';
 
-    // Method 1: If Bedrock API Key is provided
-    if (apiKey) {
-      const isMantle = apiKey.startsWith('ABSKTWFudGxl') || !modelId.startsWith('anthropic.') && !modelId.startsWith('amazon.nova');
+    // Method 1: Open-Source AI Provider Support (Groq / OpenRouter / Ollama)
+    const groqKey = process.env.GROQ_API_KEY;
+    const openRouterKey = process.env.OPENROUTER_API_KEY;
+    const ollamaUrl = process.env.OLLAMA_BASE_URL;
+
+    if (groqKey) {
+      // High-speed open-source Llama 3.3 on Groq Cloud
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`,
+        },
+        body: JSON.stringify({
+          model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (groqRes.ok) {
+        decoded = await groqRes.text();
+      }
+    } else if (openRouterKey) {
+      // Free / Open-source models via OpenRouter (DeepSeek R1 / Llama 3.3)
+      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openRouterKey}`,
+        },
+        body: JSON.stringify({
+          model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (orRes.ok) {
+        decoded = await orRes.text();
+      }
+    } else if (ollamaUrl) {
+      // 100% Offline Local Open-Source LLM (Ollama)
+      const olRes = await fetch(`${ollamaUrl.replace(/\/+$/, '')}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: process.env.OLLAMA_MODEL || 'llama3',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (olRes.ok) {
+        decoded = await olRes.text();
+      }
+    } else if (apiKey) {
+      // Method 2: AWS Bedrock Mantle Distributed Inference Endpoint
+      const isMantle = apiKey.startsWith('ABSKTWFudGxl') || (!modelId.startsWith('anthropic.') && !modelId.startsWith('amazon.nova'));
       const effectiveModel = isMantle && modelId.startsWith('anthropic.') ? 'deepseek.v3.2' : modelId;
 
       if (isMantle) {
-        // Bedrock Mantle Distributed Inference Endpoint (OpenAI/Anthropic compatible)
         const mantleUrl = `https://bedrock-mantle.${region}.api.aws/v1/chat/completions`;
         const mantlePayload = {
           model: effectiveModel,
@@ -107,16 +179,15 @@ export async function invokeBedrockAgent<T>({
             'Accept': 'application/json',
           },
           body: JSON.stringify(mantlePayload),
+          signal: AbortSignal.timeout(5000),
         });
 
-        if (!res.ok) {
+        if (res.ok) {
+          decoded = await res.text();
+        } else {
           const errText = await res.text();
-          const latencyMs = Date.now() - startTime;
           console.warn(`[Bedrock Mantle API] ${res.status} ${res.statusText}:`, errText);
-          return { data: null, error: errText, latencyMs };
         }
-
-        decoded = await res.text();
       } else {
         // Standard Bedrock Runtime Endpoint
         const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
@@ -128,16 +199,15 @@ export async function invokeBedrockAgent<T>({
             'Accept': 'application/json',
           },
           body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(5000),
         });
 
-        if (!res.ok) {
+        if (res.ok) {
+          decoded = await res.text();
+        } else {
           const errText = await res.text();
-          const latencyMs = Date.now() - startTime;
           console.warn(`[Bedrock API Key] ${res.status} ${res.statusText}:`, errText);
-          return { data: null, error: errText, latencyMs };
         }
-
-        decoded = await res.text();
       }
     } else {
       // Method 2: Standard AWS SDK BedrockRuntimeClient with IAM SigV4

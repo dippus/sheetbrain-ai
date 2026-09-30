@@ -3,6 +3,13 @@
 import React, { useState, useMemo } from 'react';
 import { SheetData, SheetColumn } from '@/types/sheet';
 import {
+  generateContextualScenarios,
+  computeFormulaDrivenSensitivityGrid,
+  computeFormulaDrivenMonteCarlo,
+  findPrimaryKpiCell,
+  detectMetricPolarity,
+} from '@/lib/engine/scenarioEngine';
+import {
   Sliders,
   RotateCcw,
   Target,
@@ -76,9 +83,25 @@ export default function ScenarioMatrixView({
   }, [safeColumns, cellMap, totalRows]);
 
   // 2. Identify numeric columns available as drivers
+  // Check both column type AND actual cell data (AI-generated sheets sometimes use type='string' for numeric data)
   const numericColumns = useMemo<SheetColumn[]>(() => {
-    return safeColumns.filter(c => c.type === 'number' || c.type === 'currency' || c.type === 'percentage');
-  }, [safeColumns]);
+    return safeColumns.filter(c => {
+      // Explicit type check
+      if (c.type === 'number' || c.type === 'currency' || c.type === 'percentage') return true;
+      // Fallback: check if majority of non-empty cells in this column are numeric
+      if (c.key === 'A') return false; // A column is typically labels
+      let numCount = 0;
+      let total = 0;
+      for (const r of realRows) {
+        const cell = cellMap[`${c.key}${r}`];
+        if (cell && cell.v !== undefined && cell.v !== null && cell.v !== '') {
+          total++;
+          if (typeof cell.v === 'number' && !isNaN(cell.v)) numCount++;
+        }
+      }
+      return total > 0 && numCount / total >= 0.5; // 50%+ numeric = treat as numeric
+    });
+  }, [safeColumns, cellMap, realRows]);
 
   const [selectedColKey, setSelectedColKey] = useState<string>(numericColumns[0]?.key || 'B');
   const [secondaryColKey, setSecondaryColKey] = useState<string>(numericColumns[1]?.key || numericColumns[0]?.key || 'C');
@@ -135,134 +158,57 @@ export default function ScenarioMatrixView({
     };
   }, [cellMap, primaryCol, baseMetrics.sum, realRows, activeScenario]);
 
-  // 5. Pre-Built Multi-Scenario Matrix Grid (Bull, Bear, Conservative, Severe Shock)
+  // 5. Context-Aware Logical Scenarios tailored to metric business polarity
+  const kpiInfo = useMemo(() => findPrimaryKpiCell(sheet, primaryCol?.key), [sheet, primaryCol]);
+  const kpiLabel = kpiInfo?.label || primaryCol?.label || 'Total Metric';
+
   const scenarioMatrix = useMemo(() => {
-    const base = baseMetrics.sum;
-    return [
-      {
-        key: 'bull',
-        name: '🚀 Bull Case (+25%)',
-        multiplier: 1.25,
-        deltaStr: '+25%',
-        prompt: `Simulate high growth: increase ${primaryCol?.label || 'all metrics'} by 25%`,
-        simSum: Math.round(base * 1.25),
-        deltaVal: Math.round(base * 0.25),
-        type: 'growth',
-        desc: 'Accelerated market expansion with optimized pipeline conversion',
-      },
-      {
-        key: 'conservative',
-        name: '🛡️ Conservative (+10%)',
-        multiplier: 1.10,
-        deltaStr: '+10%',
-        prompt: `Simulate moderate progress: increase ${primaryCol?.label || 'all metrics'} by 10%`,
-        simSum: Math.round(base * 1.10),
-        deltaVal: Math.round(base * 0.10),
-        type: 'steady',
-        desc: 'Steady baseline execution with moderate organic customer retention',
-      },
-      {
-        key: 'bear',
-        name: '📉 Bear Contraction (-20%)',
-        multiplier: 0.80,
-        deltaStr: '-20%',
-        prompt: `Simulate downside contraction: decrease ${primaryCol?.label || 'all metrics'} by 20%`,
-        simSum: Math.round(base * 0.80),
-        deltaVal: Math.round(base * -0.20),
-        type: 'risk',
-        desc: 'Macroeconomic headwinds, compressed deal velocity & demand slowdown',
-      },
-      {
-        key: 'shock',
-        name: '⚡ Severe Shock (-35%)',
-        multiplier: 0.65,
-        deltaStr: '-35%',
-        prompt: `Simulate macro crisis: decrease ${primaryCol?.label || 'all metrics'} by 35%`,
-        simSum: Math.round(base * 0.65),
-        deltaVal: Math.round(base * -0.35),
-        type: 'crisis',
-        desc: 'Black swan tail-risk event testing minimum liquidity & capital solvency',
-      },
-    ];
-  }, [baseMetrics.sum, primaryCol]);
+    if (!primaryCol) return [];
+    return generateContextualScenarios(primaryCol, baseMetrics.sum, kpiLabel);
+  }, [primaryCol, baseMetrics.sum, kpiLabel]);
 
-  // 6. 2-Way Sensitivity Table Generator (5x5 Matrix: Driver X vs Driver Y)
+  // 6. True 2-Way Sensitivity Table Generator using HyperFormula (Zero fake math)
   const sensitivityTable = useMemo(() => {
-    const xSteps = [-0.2, -0.1, 0, 0.1, 0.2];
-    const ySteps = [-0.2, -0.1, 0, 0.1, 0.2];
-    const base = baseMetrics.sum;
+    return computeFormulaDrivenSensitivityGrid(
+      sheet,
+      primaryCol?.key || 'B',
+      secondaryCol?.key || primaryCol?.key || 'B',
+      realRows
+    );
+  }, [sheet, primaryCol?.key, secondaryCol?.key, realRows]);
 
-    const grid = ySteps.map(yPct => {
-      const cells = xSteps.map(xPct => {
-        const combinedMult = (1 + xPct) * (1 + yPct * 0.6);
-        const val = Math.round(base * combinedMult);
-        const deltaPercent = Math.round((combinedMult - 1) * 100);
-        return {
-          xPct,
-          yPct,
-          val,
-          deltaPercent,
-        };
-      });
-      return { yPct, cells };
-    });
-
-    return { xSteps, ySteps, grid };
-  }, [baseMetrics.sum]);
-
-  // 7. Monte Carlo Probabilistic Simulation Engine (300 Runs)
+  // 7. True Monte Carlo Probabilistic Simulation Engine using HyperFormula (100 Iterations)
   const monteCarloStats = useMemo(() => {
-    const iterations = 300;
-    const base = baseMetrics.sum;
-    const results: number[] = [];
+    return computeFormulaDrivenMonteCarlo(
+      sheet,
+      primaryCol?.key || 'B',
+      secondaryCol?.key || primaryCol?.key || 'B',
+      realRows
+    );
+  }, [sheet, primaryCol?.key, secondaryCol?.key, realRows]);
 
-    let seed = 42;
-    const pseudoRandom = () => {
-      seed = (seed * 9301 + 49297) % 233280;
-      return seed / 233280;
-    };
-
-    for (let i = 0; i < iterations; i++) {
-      const u1 = pseudoRandom();
-      const u2 = pseudoRandom();
-      const z = Math.sqrt(-2.0 * Math.log(u1 || 0.0001)) * Math.cos(2.0 * Math.PI * u2);
-      const randomPct = z * 0.09;
-      const simTotal = Math.round(base * (1 + randomPct));
-      results.push(simTotal);
+  // 8. Contextually Logical Quick Presets
+  const quickScenarios: { label: string; prompt: string; mult: number }[] = useMemo(() => {
+    if (suggestedScenarios && suggestedScenarios.length > 0) {
+      return suggestedScenarios.map(s => ({ label: s.label, prompt: s.prompt, mult: s.mult ?? 1.2 }));
     }
-
-    results.sort((a, b) => a - b);
-
-    const p10 = results[Math.floor(iterations * 0.1)];
-    const p50 = results[Math.floor(iterations * 0.5)];
-    const p90 = results[Math.floor(iterations * 0.9)];
-
-    const min = results[0] || 0;
-    const max = results[results.length - 1] || 1;
-    const bucketCount = 12;
-    const bucketSize = (max - min) / bucketCount || 1;
-
-    const buckets = Array.from({ length: bucketCount }, (_, idx) => {
-      const lower = min + idx * bucketSize;
-      const upper = lower + bucketSize;
-      const count = results.filter(v => v >= lower && (idx === bucketCount - 1 ? v <= upper : v < upper)).length;
-      return {
-        label: `${Math.round(lower / 1000)}k`,
-        count,
-      };
-    });
-
-    return { p10, p50, p90, buckets };
-  }, [baseMetrics.sum]);
-
-  const quickScenarios: { label: string; prompt: string; mult: number }[] = suggestedScenarios && suggestedScenarios.length > 0
-    ? suggestedScenarios.map(s => ({ label: s.label, prompt: s.prompt, mult: s.mult ?? 1.2 }))
-    : [
-        { label: '+20% Revenue Surge', prompt: `Increase ${primaryCol?.label || 'revenue'} by 20%`, mult: 1.2 },
-        { label: '-15% Churn Drop', prompt: `Decrease ${primaryCol?.label || 'revenue'} by 15%`, mult: 0.85 },
-        { label: '+30% Bull Market', prompt: `Boost ${primaryCol?.label || 'revenue'} by 30%`, mult: 1.3 },
-        { label: '-25% Budget Cut', prompt: `Cut ${primaryCol?.label || 'costs'} by 25%`, mult: 0.75 },
+    const polarity = detectMetricPolarity(primaryCol?.label || '');
+    const colName = primaryCol?.label || 'Metric';
+    if (polarity === 'negative') {
+      return [
+        { label: '✂️ -15% Lean Cut', prompt: `Decrease ${colName} by 15%`, mult: 0.85 },
+        { label: '🛡️ -5% Budget Trim', prompt: `Decrease ${colName} by 5%`, mult: 0.95 },
+        { label: '⚠️ +10% Creep', prompt: `Increase ${colName} by 10%`, mult: 1.10 },
+        { label: '⚡ +25% Cost Surge', prompt: `Increase ${colName} by 25%`, mult: 1.25 },
       ];
+    }
+    return [
+      { label: '🚀 +20% Expansion', prompt: `Increase ${colName} by 20%`, mult: 1.20 },
+      { label: '🛡️ +8% Organic', prompt: `Increase ${colName} by 8%`, mult: 1.08 },
+      { label: '📉 -15% Slowdown', prompt: `Decrease ${colName} by 15%`, mult: 0.85 },
+      { label: '⚡ -30% Shock', prompt: `Decrease ${colName} by 30%`, mult: 0.70 },
+    ];
+  }, [suggestedScenarios, primaryCol]);
 
   const handleApplySlider = () => {
     const mult = 1 + sliderVal / 100;
@@ -668,30 +614,24 @@ export default function ScenarioMatrixView({
       {activeTab === 'scenarios' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {scenarioMatrix.map(sc => {
-            const isGrowth = sc.type === 'growth';
-            const isRisk = sc.type === 'risk' || sc.type === 'crisis';
-            const isSteady = sc.type === 'steady';
+            const isFavorable = sc.isPositiveOutcome;
 
             return (
               <div
                 key={sc.key}
                 className={`p-5 rounded-2xl border bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shadow-sm dark:shadow-xl flex flex-col justify-between gap-4 transition-all duration-200 hover:bg-white dark:hover:bg-slate-900/90 hover:scale-[1.01] ${
-                  isGrowth
+                  isFavorable
                     ? 'border-emerald-500/30 hover:border-emerald-500/60'
-                    : isRisk
-                    ? 'border-rose-500/30 hover:border-rose-500/60'
-                    : 'border-cyan-500/30 hover:border-cyan-500/60'
+                    : 'border-rose-500/30 hover:border-rose-500/60'
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">{sc.name}</span>
                     <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums ${
-                      sc.multiplier > 1
+                      isFavorable
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                        : sc.multiplier < 1
-                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                        : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30'
+                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                     }`}>
                       {sc.deltaStr}
                     </span>
@@ -722,11 +662,9 @@ export default function ScenarioMatrixView({
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Variance:</span>
                     <span className={`font-mono font-bold tabular-nums ${
-                      sc.deltaVal > 0
+                      isFavorable
                         ? 'text-emerald-600 dark:text-emerald-400'
-                        : sc.deltaVal < 0
-                        ? 'text-rose-600 dark:text-rose-400'
-                        : 'text-slate-500'
+                        : 'text-rose-600 dark:text-rose-400'
                     }`}>
                       {sc.deltaVal > 0 ? `+` : (sc.deltaVal < 0 ? `-` : '')}
                       {formatNum(Math.abs(sc.deltaVal), primaryCol?.type)} ({sc.deltaStr})
@@ -757,9 +695,12 @@ export default function ScenarioMatrixView({
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
                   {primaryCol?.label || 'Driver X'} vs {secondaryCol?.label || 'Driver Y'}
                 </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  KPI: {sensitivityTable.targetKpiLabel} {sensitivityTable.targetKpiCoord ? `(${sensitivityTable.targetKpiCoord})` : ''}
+                </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Evaluates aggregate model totals across 25 simultaneous multi-variable permutations
+                Evaluates {sensitivityTable.targetKpiLabel} across 25 permutations via HyperFormula deterministic recalculation
               </p>
             </div>
           </div>
@@ -820,11 +761,14 @@ export default function ScenarioMatrixView({
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <span>Monte Carlo Probabilistic Distribution</span>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
-                  300 Iterations
+                  100 HyperFormula Iterations
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  KPI: {monteCarloStats.targetKpiLabel}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Simulated Gaussian normal distribution with ±18% volatility band around baseline driver
+                Simulated Gaussian normal distribution with ±12% volatility band around {primaryCol?.label} evaluated through HyperFormula
               </p>
             </div>
           </div>
