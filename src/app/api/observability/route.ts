@@ -7,7 +7,11 @@ export async function GET() {
   const region = process.env.BEDROCK_REGION || process.env.AWS_REGION || 'ap-southeast-2';
   const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20240620-v1:0';
   const s3Bucket = process.env.S3_BUCKET_NAME || 'sheetbrain-workbooks-ap-southeast-2';
-  const hasBedrockKey = Boolean(process.env.AWS_BEDROCK_API_KEY || (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY));
+  const hasBedrockKey = Boolean(
+    process.env.AWS_BEARER_TOKEN_BEDROCK ||
+    process.env.AWS_BEDROCK_API_KEY ||
+    (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
+  );
   const persistedList = listPersistedWorkbooks();
 
   return NextResponse.json({
