@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import * as XLSX from 'xlsx';
 import { parseCSVToWorkbook } from '@/lib/engine/csvHelper';
 import { parseXLSXToWorkbook } from '@/lib/engine/excelHelper';
 import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
@@ -37,7 +38,13 @@ export async function GET(request: NextRequest) {
               rowCount = Math.max(0, lines.length - 1);
             } catch (e) {}
           } else {
-            rowCount = 1001; // Known for Expense-Claims or binary size
+            try {
+              const buffer = fs.readFileSync(fullPath);
+              const wb = XLSX.read(buffer, { type: 'buffer' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const range = ws?.['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : null;
+              rowCount = range ? range.e.r : 0;
+            } catch (e) {}
           }
 
           return {
@@ -93,8 +100,9 @@ export async function GET(request: NextRequest) {
       columnCount: workbook.sheets[0]?.columns?.length || 0,
       workbook,
     });
-  } catch (error: any) {
-    console.error('Local data read error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown local data error';
+    console.error('Local data read error:', message);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

@@ -161,7 +161,9 @@ export function exportWorkbookToXLSX(workbook: WorkbookModel): Blob {
   const wb = XLSX.utils.book_new();
 
   for (const sheet of workbook.sheets || []) {
-    const wsData: any[][] = [];
+    type ExcelCellPrimitive = string | number | boolean | null | undefined;
+    type ExcelCellOutput = ExcelCellPrimitive | { t: string; f: string };
+    const wsData: ExcelCellOutput[][] = [];
     const colKeys = (sheet.columns || []).map(c => c.key);
 
     // Row 1: Header labels
@@ -169,7 +171,7 @@ export function exportWorkbookToXLSX(workbook: WorkbookModel): Blob {
 
     // Rows 2..N: Data and formulas
     for (let r = 2; r <= sheet.rowCount; r++) {
-      const rowVals: any[] = [];
+      const rowVals: ExcelCellOutput[] = [];
       for (const k of colKeys) {
         const cell = sheet.cellData[`${k}${r}`];
         if (cell?.f) {

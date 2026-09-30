@@ -46,7 +46,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="h-full bg-[var(--app-bg)] text-[var(--cell-text)] antialiased overflow-hidden select-none">
+      <body className="h-full bg-[var(--app-bg)] text-[var(--cell-text)] antialiased overflow-hidden">
         {children}
       </body>
     </html>

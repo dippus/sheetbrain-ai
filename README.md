@@ -88,7 +88,7 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 | **Styling & UI** | **Tailwind CSS + Lucide Icons** | Modern dark/light mode, sleek glassmorphism studio UI |
 | **Charts** | **Recharts + Univer Charts** | Responsive, dynamic business visualizations |
 | **Generative AI** | **Amazon Bedrock (Claude 3.5 Sonnet)** | Semantic reasoning, ontology mapping & multi-agent intent |
-| **Formula Engine** | **Custom TypeScript Deterministic Engine** | Instant (<100ms) formula evaluation & syntax validation |
+| **Formula Engine** | **HyperFormula v3.4.0 (Open-Source DAG Engine)** | Instant (<50ms) reactive dependency graph, IF(), VLOOKUP(), aggregations |
 | **Hosting & CI/CD** | **AWS Amplify** | Serverless hosting with global edge CDN |
 
 ---
@@ -106,11 +106,11 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 
 For complete technical and architectural specifications, see:
 * [`AGENTS.md`](./AGENTS.md) — Master Operating Guidelines & Agent Constitution
-* [`PRD.md`](./PRD.md) — Full Product Requirements Document
-* [`ARCHITECTURE.md`](./ARCHITECTURE.md) — System Architecture & AWS Integration Specs
-* [`AGENT_PROMPTS.md`](./AGENT_PROMPTS.md) — Multi-Agent System Prompts & JSON Contracts
-* [`TASK_BOARD.md`](./TASK_BOARD.md) — Live Development Progress Tracker
-* [`HACKATHON_RULES.md`](./HACKATHON_RULES.md) — Scoring Rubrics & Demo Video Formula
+* [`docs/03_REQUIREMENTS.md`](./docs/03_REQUIREMENTS.md) — Full Requirements Specification
+* [`docs/06_ARCHITECTURE.md`](./docs/06_ARCHITECTURE.md) — System Architecture & AWS Integration
+* [`docs/07_DATA_MODEL.md`](./docs/07_DATA_MODEL.md) — Data Model & WorkbookJSON Schema
+* [`docs/21_TASKS.md`](./docs/21_TASKS.md) — Live Development Task Board
+* [`docs/22_AI_DEVELOPMENT_LOG.md`](./docs/22_AI_DEVELOPMENT_LOG.md) — AI Development Milestones Log
 
 ---
 

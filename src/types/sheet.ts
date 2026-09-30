@@ -11,6 +11,8 @@ export interface SheetCell {
   format?: string;
   isModified?: boolean;
   deltaPercent?: string;
+  baselineValue?: string | number | boolean;
+  deltaValue?: number;
 }
 
 export interface SheetColumn {

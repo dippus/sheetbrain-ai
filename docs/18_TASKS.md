@@ -47,3 +47,32 @@
 - [ ] Record 2-minute demo video following `17_DEMO_SCRIPT.md`
 - [ ] Verify all gates in `20_SUBMISSION_CHECKLIST.md`
 - [ ] Publish project submission story on builder.aws.com and submit before deadline
+
+---
+
+## Phase 6: Dark OLED Fintech Refactor, Zero Any & Governance Polish (COMPLETED ✅)
+- [x] Zero-AI-Slop Dark OLED Fintech Design System across all views (`REQ-NF-001`)
+- [x] Zero `any` strict TypeScript audit across all source files (`REQ-NF-004`)
+- [x] Recharts hydration mismatch guards & Univer SSR protection (`REQ-NF-004`)
+- [x] Formula injection prevention & deterministic local hybrid calculation (`REQ-F-002`, `REQ-NF-005`)
+- [x] 1-Click Instant Demo Mode with 3 pre-warmed competition scenarios (`REQ-F-009`)
+- [x] Boardroom Executive Summary & C-Suite Governance Findings export modal (`REQ-F-006`)
+- [x] Build and typecheck verification cleanly passing with 0 errors (`npm run typecheck`)
+
+---
+
+## Phase 7: Full-App Dual-Theme Token Unification & Production Sweep (COMPLETED ✅)
+- [x] Comprehensive Light Mode + Dark Mode Dual-Theme Contract unification across all pages and views (`REQ-NF-001`)
+- [x] Canvas Base Background adaptation (`bg-slate-50` / `dark:bg-slate-950`)
+- [x] L1 Card & Panel glassmorphism adaptation (`bg-white/80 border-slate-200/80` / `dark:bg-slate-900/60 dark:border-slate-800/80`)
+- [x] L2 Interactive buttons and hover states adaptation (`hover:bg-slate-100 text-slate-800` / `dark:hover:bg-slate-800/90 dark:text-slate-100`)
+- [x] Scenario Matrix View dual-theme refactor (`ScenarioMatrixView.tsx`)
+- [x] Executive Report View dual-theme refactor (`ExecutiveReportView.tsx`)
+- [x] Visual Analytics Recharts tooltips & axis dual-theme refactor (`VisualAnalyticsView.tsx`)
+- [x] Formula Auditor telemetry & AWS CloudWatch logs dual-theme refactor (`FormulaAuditor.tsx`)
+- [x] Plain-English AI Formula Explainer modal dual-theme refactor (`FormulaExplainerModal.tsx`)
+- [x] Univer Floating Diff Banner & Audit Drawer dual-theme refactor (`UniverSheetWrapper.tsx`)
+- [x] Univer Spreadsheet Canvas modified-cell dual-theme highlights (`UniverSheetCore.tsx`)
+- [x] Top Studio Header, View Switcher, AI Prompt bar, and Shortcuts/Boardroom Modals dual-theme refactor (`page.tsx`)
+- [x] Multi-Agent Pipeline Indicator bar dual-theme refactor (`AgentPipelineBar.tsx`)
+- [x] TypeScript strict typecheck validation passing with 0 errors (`npx tsc --noEmit`)

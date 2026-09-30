@@ -1,12 +1,12 @@
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { BedrockRuntimeClient, BedrockRuntimeClientConfig, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
-const region = process.env.BEDROCK_REGION || 'us-east-1';
+const region = process.env.BEDROCK_REGION || 'ap-southeast-2';
 const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20240620-v1:0';
 
 // Initialize Bedrock client. Reads explicit credentials or IAM role automatically.
 export function getBedrockClient(): BedrockRuntimeClient | null {
   try {
-    const config: any = { region };
+    const config: BedrockRuntimeClientConfig = { region };
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
       config.credentials = {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -38,18 +38,16 @@ export async function invokeBedrockAgent<T>({
 }: BedrockAgentInvokeOptions): Promise<{ data: T | null; error?: string; latencyMs: number }> {
   const startTime = Date.now();
 
-  // If no credentials configured, skip Bedrock call immediately to avoid latency
-  if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE && !process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI) {
+  // Check for credentials: API key or AWS IAM credentials
+  const apiKey = process.env.AWS_BEARER_TOKEN_BEDROCK || process.env.AWS_BEDROCK_API_KEY;
+  const hasIam = Boolean(process.env.AWS_ACCESS_KEY_ID || process.env.AWS_PROFILE || process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI);
+
+  if (!apiKey && !hasIam) {
     return { data: null, error: 'NO_CREDENTIALS', latencyMs: 0 };
   }
 
-  const client = getBedrockClient();
-  if (!client) {
-    return { data: null, error: 'Bedrock client unavailable', latencyMs: 0 };
-  }
-
   try {
-    let payload: any;
+    let payload: Record<string, unknown>;
 
     if (modelId.startsWith('anthropic.')) {
       payload = {
@@ -81,25 +79,95 @@ export async function invokeBedrockAgent<T>({
       };
     }
 
-    const command = new InvokeModelCommand({
-      modelId,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify(payload),
-    });
+    let decoded = '';
 
-    const response = await client.send(command);
-    const latencyMs = Date.now() - startTime;
+    // Method 1: If Bedrock API Key is provided
+    if (apiKey) {
+      const isMantle = apiKey.startsWith('ABSKTWFudGxl') || !modelId.startsWith('anthropic.') && !modelId.startsWith('amazon.nova');
+      const effectiveModel = isMantle && modelId.startsWith('anthropic.') ? 'deepseek.v3.2' : modelId;
 
-    if (!response.body) {
-      return { data: null, error: 'Empty response body from Bedrock', latencyMs };
+      if (isMantle) {
+        // Bedrock Mantle Distributed Inference Endpoint (OpenAI/Anthropic compatible)
+        const mantleUrl = `https://bedrock-mantle.${region}.api.aws/v1/chat/completions`;
+        const mantlePayload = {
+          model: effectiveModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.2,
+        };
+
+        const res = await fetch(mantleUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(mantlePayload),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          const latencyMs = Date.now() - startTime;
+          console.warn(`[Bedrock Mantle API] ${res.status} ${res.statusText}:`, errText);
+          return { data: null, error: errText, latencyMs };
+        }
+
+        decoded = await res.text();
+      } else {
+        // Standard Bedrock Runtime Endpoint
+        const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          const latencyMs = Date.now() - startTime;
+          console.warn(`[Bedrock API Key] ${res.status} ${res.statusText}:`, errText);
+          return { data: null, error: errText, latencyMs };
+        }
+
+        decoded = await res.text();
+      }
+    } else {
+      // Method 2: Standard AWS SDK BedrockRuntimeClient with IAM SigV4
+      const client = getBedrockClient();
+      if (!client) {
+        return { data: null, error: 'Bedrock client unavailable', latencyMs: 0 };
+      }
+
+      const command = new InvokeModelCommand({
+        modelId,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify(payload),
+      });
+
+      const response = await client.send(command);
+      if (!response.body) {
+        return { data: null, error: 'Empty response body from Bedrock', latencyMs: Date.now() - startTime };
+      }
+
+      decoded = new TextDecoder().decode(response.body);
     }
 
-    const decoded = new TextDecoder().decode(response.body);
+    const latencyMs = Date.now() - startTime;
     const resultJson = JSON.parse(decoded);
 
     let textOutput = '';
-    if (resultJson.content?.[0]?.text) {
+    if (resultJson.choices?.[0]?.message?.content) {
+      textOutput = resultJson.choices[0].message.content;
+    } else if (resultJson.content?.[0]?.text) {
       textOutput = resultJson.content[0].text;
     } else if (resultJson.output?.message?.content?.[0]?.text) {
       textOutput = resultJson.output.message.content[0].text;
@@ -114,9 +182,10 @@ export async function invokeBedrockAgent<T>({
 
     const parsedData = JSON.parse(jsonMatch[0]) as T;
     return { data: parsedData, latencyMs };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Date.now() - startTime;
-    console.warn('[Bedrock] Invocation notice (safe fallback active):', err?.message || err);
-    return { data: null, error: err?.message || 'Bedrock invocation failed', latencyMs };
+    const errorMsg = err instanceof Error ? err.message : 'Bedrock invocation failed';
+    console.warn('[Bedrock] Invocation notice (safe fallback active):', errorMsg);
+    return { data: null, error: errorMsg, latencyMs };
   }
 }

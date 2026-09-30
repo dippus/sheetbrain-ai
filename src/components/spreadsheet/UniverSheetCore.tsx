@@ -4,10 +4,19 @@ import React, { useEffect, useRef } from 'react';
 import { SheetData, SheetCell } from '@/types/sheet';
 import { parseCoord, colToIndex } from '@/lib/engine/formulaEngine';
 import { indexToColLetter } from '@/lib/engine/csvHelper';
-import { createUniver, defaultTheme, LocaleType } from '@univerjs/presets';
+import { createUniver, defaultTheme, darkBlueTheme, LocaleType, mergeLocales } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import UniverPresetSheetsCoreEnUS from '@univerjs/preset-sheets-core/locales/en-US';
+import { UniverSheetsDataValidationPreset } from '@univerjs/preset-sheets-data-validation';
+import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-validation/locales/en-US';
+import '@univerjs/design/lib/index.css';
+import '@univerjs/ui/lib/index.css';
+import '@univerjs/sheets-ui/lib/index.css';
+import '@univerjs/sheets-formula-ui/lib/index.css';
+import '@univerjs/sheets-numfmt-ui/lib/index.css';
+import '@univerjs/sheets-data-validation-ui/lib/index.css';
 import '@univerjs/preset-sheets-core/lib/index.css';
+import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
 interface UniverSheetCoreProps {
   sheet: SheetData;
@@ -18,103 +27,259 @@ interface UniverSheetCoreProps {
   onAddSheet?: () => void;
   onDeleteSheet?: (id: string) => void;
   onRenameSheet?: (id: string, newName: string) => void;
+  theme?: 'dark' | 'light' | 'system';
 }
+
+interface UniverCellRaw {
+  v?: string | number | boolean;
+  f?: string;
+  s?: {
+    bl?: number;
+    ht?: number;
+    bg?: { rgb: string };
+    cl?: { rgb: string };
+  };
+}
+
+interface UniverSnapshotSheet {
+  id: string;
+  name: string;
+  rowCount: number;
+  columnCount: number;
+  cellData: Record<number, Record<number, UniverCellRaw>>;
+  columnData: Record<number, { w: number }>;
+}
+
+type UniverAPI = ReturnType<typeof createUniver>['univerAPI'];
+type FWorkbook = ReturnType<UniverAPI['createWorkbook']>;
+type WorkbookCreateParam = Parameters<UniverAPI['createWorkbook']>[0];
 
 /**
  * Converts SheetData to Univer IWorkbookData snapshot format.
  * Maps coordinates directly (A1 -> row 0, col 0) without injecting dummy headers into data cells.
+ * Supports multi-sheet workbook datasets.
  */
-function convertSheetDataToUniver(sheet: SheetData) {
-  const safeColumns = sheet.columns || [];
-  const safeRowCount = Math.max(100, (sheet.rowCount || 20) + 30);
-  const safeColCount = Math.max(26, safeColumns.length + 5);
+function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[], isDark: boolean = true) {
+  const targetSheets = allSheets && allSheets.length > 0 ? allSheets : [activeSheet];
+  const sheetOrder: string[] = [];
+  const sheetsSnapshot: Record<string, UniverSnapshotSheet> = {};
 
-  const univerCellData: Record<number, Record<number, any>> = {};
+  targetSheets.forEach((s, idx) => {
+    const sId = s.id || `sheet_${idx + 1}`;
+    sheetOrder.push(sId);
 
-  // Map user and template cells directly: A1 -> row 0, col 0; B2 -> row 1, col 1
-  Object.entries(sheet.cellData || {}).forEach(([coord, cell]) => {
-    const p = parseCoord(coord);
-    if (!p) return;
-    const colIdx = colToIndex(p.col);
-    const rowIdx = p.row - 1;
+    const safeColumns = s.columns || [];
+    const safeRowCount = Math.max(100, (s.rowCount || 20) + 30);
+    const safeColCount = Math.max(26, safeColumns.length + 5);
 
-    if (rowIdx < 0 || colIdx < 0) return;
+    const univerCellData: Record<number, Record<number, UniverCellRaw>> = {};
 
-    if (!univerCellData[rowIdx]) {
-      univerCellData[rowIdx] = {};
-    }
+    // Map user and template cells directly: A1 -> row 0, col 0; B2 -> row 1, col 1
+    Object.entries(s.cellData || {}).forEach(([coord, cell]) => {
+      const p = parseCoord(coord);
+      if (!p) return;
+      const colIdx = colToIndex(p.col);
+      const rowIdx = p.row - 1;
 
-    const isNumeric = typeof cell.v === 'number';
-    univerCellData[rowIdx][colIdx] = {
-      v: cell.v,
-      f: cell.f,
-      s: {
-        bl: cell.bold ? 1 : undefined,
-        ht: cell.align === 'center' ? 2 : cell.align === 'right' || isNumeric ? 3 : 1,
-      },
-    };
-  });
+      if (rowIdx < 0 || colIdx < 0) return;
 
-  // Column width configurations
-  const columnData: Record<number, any> = {};
-  safeColumns.forEach((col, cIdx) => {
-    columnData[cIdx] = {
-      w: col.width || 130,
+      if (!univerCellData[rowIdx]) {
+        univerCellData[rowIdx] = {};
+      }
+
+      const isNumeric = typeof cell.v === 'number';
+      const isModified = !!cell.isModified;
+      univerCellData[rowIdx][colIdx] = {
+        v: cell.v,
+        f: cell.f,
+        s: {
+          bl: cell.bold || isModified ? 1 : undefined,
+          ht: cell.align === 'center' ? 2 : cell.align === 'right' || isNumeric ? 3 : 1,
+          bg: isModified ? (isDark ? { rgb: '#172554' } : { rgb: '#dbeafe' }) : (cell.bg ? { rgb: cell.bg } : undefined),
+          cl: isModified ? (isDark ? { rgb: '#60a5fa' } : { rgb: '#1d4ed8' }) : (cell.fontColor ? { rgb: cell.fontColor } : undefined),
+        },
+      };
+    });
+
+    // Column width configurations
+    const columnData: Record<number, { w: number }> = {};
+    safeColumns.forEach((col, cIdx) => {
+      columnData[cIdx] = {
+        w: col.width || 130,
+      };
+    });
+
+    sheetsSnapshot[sId] = {
+      id: sId,
+      name: s.name || `Sheet${idx + 1}`,
+      rowCount: safeRowCount,
+      columnCount: safeColCount,
+      cellData: univerCellData,
+      columnData,
     };
   });
 
   return {
-    id: sheet.id || 'workbook-sheetbrain',
-    name: sheet.name || 'SheetBrain',
+    id: activeSheet.id || 'workbook-sheetbrain',
+    name: activeSheet.name || 'SheetBrain',
     appVersion: '3.0.0',
-    sheetOrder: [sheet.id || 'sheet-1'],
-    sheets: {
-      [sheet.id || 'sheet-1']: {
-        id: sheet.id || 'sheet-1',
-        name: sheet.name || 'Sheet1',
-        rowCount: safeRowCount,
-        columnCount: safeColCount,
-        cellData: univerCellData,
-        columnData,
-      },
-    },
-  };
+    sheetOrder,
+    sheets: sheetsSnapshot,
+  } as unknown as WorkbookCreateParam;
 }
 
 export default function UniverSheetCore({
   sheet,
+  sheets,
+  activeSheetId,
+  onSelectSheet,
   onCellChange,
+  theme = 'dark',
 }: UniverSheetCoreProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const univerRef = useRef<any>(null);
+  const univerRef = useRef<{ univer: { dispose: () => void }; univerAPI: UniverAPI } | null>(null);
   const isInternalChangeRef = useRef<boolean>(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sheetRef = useRef<SheetData>(sheet);
 
   sheetRef.current = sheet;
 
+  // Extract cell values from active sheet in Univer and sync to React state
+  const extractAndSyncSheet = (fWorkbook: FWorkbook | null) => {
+    try {
+      if (!fWorkbook) return;
+      const snapshot = fWorkbook.save();
+      const currentActiveId = fWorkbook.getActiveSheet()?.getSheetId() || Object.keys(snapshot.sheets || {})[0];
+      const targetId = sheetRef.current.id || currentActiveId;
+      const sheetSnapshot = snapshot.sheets?.[currentActiveId] || snapshot.sheets?.[targetId];
+      if (!sheetSnapshot) return;
+
+      const rawCellData = (sheetSnapshot.cellData || {}) as Record<string, Record<string, UniverCellRaw>>;
+      const updatedCellData: Record<string, SheetCell> = {};
+      let maxRow = sheetRef.current.rowCount || 2;
+      let maxCol = (sheetRef.current.columns || []).length || 1;
+
+      Object.entries(rawCellData).forEach(([rStr, rowObj]: [string, Record<string, UniverCellRaw>]) => {
+        const rIdx = parseInt(rStr, 10);
+        const rowNum = rIdx + 1;
+        if (rowNum > maxRow) maxRow = rowNum;
+
+        Object.entries(rowObj || {}).forEach(([cStr, cellObj]: [string, UniverCellRaw]) => {
+          const cIdx = parseInt(cStr, 10);
+          if (cIdx + 1 > maxCol) maxCol = cIdx + 1;
+          const colLetter = indexToColLetter(cIdx);
+          const coord = `${colLetter}${rowNum}`;
+
+          if (cellObj && (cellObj.v !== undefined || cellObj.f)) {
+            updatedCellData[coord] = {
+              v: cellObj.v,
+              f: cellObj.f,
+              bold: !!cellObj.s?.bl,
+            };
+          }
+        });
+      });
+
+      // Compare with existing cellData to avoid unnecessary state thrashing
+      const oldKeys = Object.keys(sheetRef.current.cellData || {});
+      const newKeys = Object.keys(updatedCellData);
+      let hasChanged = oldKeys.length !== newKeys.length;
+      if (!hasChanged) {
+        for (const k of newKeys) {
+          const o = sheetRef.current.cellData[k];
+          const n = updatedCellData[k];
+          if (!o || o.v !== n.v || o.f !== n.f || o.bold !== n.bold) {
+            hasChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasChanged) return;
+
+      // Sync safely back to SheetBrain state
+      isInternalChangeRef.current = true;
+      onCellChange({
+        ...sheetRef.current,
+        id: targetId,
+        rowCount: Math.max(sheetRef.current.rowCount, maxRow),
+        cellData: updatedCellData,
+      });
+      setTimeout(() => {
+        isInternalChangeRef.current = false;
+      }, 100);
+    } catch (e) {
+      // Guard against transient state reads during teardown
+    }
+  };
+
+  // Switch active sheet in Univer when activeSheetId changes without tearing down the canvas
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!univerRef.current?.univerAPI || !activeSheetId) return;
+    try {
+      const fWorkbook = univerRef.current.univerAPI.getActiveWorkbook();
+      if (!fWorkbook) return;
+
+      // Flush pending save for current sheet before switching
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        extractAndSyncSheet(fWorkbook);
+      }
+
+      const targetSheet = fWorkbook.getSheetBySheetId(activeSheetId);
+      if (targetSheet) {
+        const currentActive = fWorkbook.getActiveSheet();
+        if (currentActive?.getSheetId() !== activeSheetId) {
+          fWorkbook.setActiveSheet(targetSheet);
+        }
+      }
+    } catch (err) {
+      console.warn('Switch active sheet in Univer:', err);
+    }
+  }, [activeSheetId]);
+
+  useEffect(() => {
+    const host = containerRef.current;
+    if (!host) return;
 
     let destroyed = false;
-    let localUniver: any = null;
+    let localUniver: { dispose: () => void } | null = null;
+    let localWorkbook: FWorkbook | null = null;
+
+    // Create an isolated sub-container for Univer instance to prevent DOM collisions
+    const container = document.createElement('div');
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.position = 'absolute';
+    container.style.inset = '0';
+    container.style.overflow = 'hidden';
+    host.append(container);
 
     try {
-      // Initialize Open-Source Univer Sheets Core Preset with full toolbar, formula bar, and context menu
+      const isDark = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+
+      // Initialize Open-Source Univer Sheets Core & Data Validation Presets with official mergeLocales pattern
       const { univer, univerAPI } = createUniver({
         locale: LocaleType.EN_US,
         locales: {
-          [LocaleType.EN_US]: UniverPresetSheetsCoreEnUS,
+          [LocaleType.EN_US]: mergeLocales(
+            UniverPresetSheetsCoreEnUS,
+            UniverPresetSheetsDataValidationEnUS
+          ),
         },
-        theme: defaultTheme,
+        theme: isDark ? darkBlueTheme : defaultTheme,
         presets: [
           UniverSheetsCorePreset({
-            container: containerRef.current,
+            container,
             header: true,      // Display ribbon toolbar & formula bar
             toolbar: true,     // Excel ribbon toolbar (Bold, Italic, Color, Borders, Align)
             formulaBar: true,  // Excel fx formula bar
             contextMenu: true, // Native right-click context menu
-            footer: { sheetBar: true, statisticBar: true }, // Tabs and live calculation stats
+            footer: { sheetBar: false, statisticBar: true }, // SheetBrain provides native safe bottom tab bar
+          }),
+          UniverSheetsDataValidationPreset({
+            showEditOnDropdown: true,
+            showSearchOnDropdown: true,
           }),
         ],
       });
@@ -122,12 +287,31 @@ export default function UniverSheetCore({
       localUniver = univer;
       univerRef.current = { univer, univerAPI };
 
-      // Convert active sheet to Univer workbook data
-      const initialWorkbookData = convertSheetDataToUniver(sheetRef.current);
+      // Convert active sheet to Univer workbook data with multi-sheet support
+      const initialWorkbookData = convertSheetDataToUniver(sheetRef.current, sheets, isDark);
       const fWorkbook = univerAPI.createWorkbook(initialWorkbookData);
+      localWorkbook = fWorkbook;
+
+      // Ensure active sheet is selected in Univer
+      if (activeSheetId) {
+        try {
+          const targetSheet = fWorkbook.getSheetBySheetId(activeSheetId);
+          if (targetSheet) {
+            fWorkbook.setActiveSheet(targetSheet);
+          }
+        } catch {}
+      }
+
+      // Flush data before browser window reload/close
+      const handleBeforeUnload = () => {
+        if (fWorkbook) {
+          extractAndSyncSheet(fWorkbook);
+        }
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
 
       // Listen to Univer edits and sync back to SheetBrain state safely
-      fWorkbook.onCommandExecuted((command: any) => {
+      fWorkbook.onCommandExecuted((command: { id?: string }) => {
         if (destroyed || isInternalChangeRef.current) return;
 
         // Skip non-mutation commands (selections, cursor moves, focus, hover, scroll)
@@ -142,76 +326,14 @@ export default function UniverSheetCore({
           return;
         }
 
-        // Debounce cell change sync to prevent re-render thrashing during drag/typing/right-click
+        // Debounce cell change sync to prevent re-render thrashing during typing
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
 
         debounceTimerRef.current = setTimeout(() => {
           if (destroyed) return;
-
-          try {
-            const snapshot = fWorkbook.save();
-            const activeId = fWorkbook.getActiveSheet()?.getSheetId() || Object.keys(snapshot.sheets || {})[0];
-            const activeSheetSnapshot = snapshot.sheets?.[activeId];
-            if (!activeSheetSnapshot) return;
-
-            const rawCellData = activeSheetSnapshot.cellData || {};
-            const updatedCellData: Record<string, SheetCell> = {};
-            let maxRow = sheetRef.current.rowCount || 2;
-            let maxCol = (sheetRef.current.columns || []).length || 1;
-
-            Object.entries(rawCellData).forEach(([rStr, rowObj]: [string, any]) => {
-              const rIdx = parseInt(rStr, 10);
-              const rowNum = rIdx + 1;
-              if (rowNum > maxRow) maxRow = rowNum;
-
-              Object.entries(rowObj || {}).forEach(([cStr, cellObj]: [string, any]) => {
-                const cIdx = parseInt(cStr, 10);
-                if (cIdx + 1 > maxCol) maxCol = cIdx + 1;
-                const colLetter = indexToColLetter(cIdx);
-                const coord = `${colLetter}${rowNum}`;
-
-                if (cellObj && (cellObj.v !== undefined || cellObj.f)) {
-                  updatedCellData[coord] = {
-                    v: cellObj.v,
-                    f: cellObj.f,
-                    bold: !!cellObj.s?.bl,
-                  };
-                }
-              });
-            });
-
-            // Compare with existing cellData to avoid unnecessary React re-renders
-            const oldKeys = Object.keys(sheetRef.current.cellData || {});
-            const newKeys = Object.keys(updatedCellData);
-            let hasChanged = oldKeys.length !== newKeys.length;
-            if (!hasChanged) {
-              for (const k of newKeys) {
-                const o = sheetRef.current.cellData[k];
-                const n = updatedCellData[k];
-                if (!o || o.v !== n.v || o.f !== n.f || o.bold !== n.bold) {
-                  hasChanged = true;
-                  break;
-                }
-              }
-            }
-
-            if (!hasChanged) return;
-
-            // Sync with SheetBrain without feedback loop
-            isInternalChangeRef.current = true;
-            onCellChange({
-              ...sheetRef.current,
-              rowCount: Math.max(sheetRef.current.rowCount, maxRow),
-              cellData: updatedCellData,
-            });
-            setTimeout(() => {
-              isInternalChangeRef.current = false;
-            }, 100);
-          } catch {
-            // Guard against transient state reads during teardown
-          }
+          extractAndSyncSheet(fWorkbook);
         }, 200);
       });
     } catch (err) {
@@ -223,16 +345,27 @@ export default function UniverSheetCore({
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
-      if (localUniver) {
+      // Guarantee final cell edit is saved before unmounting
+      if (localWorkbook) {
         try {
-          localUniver.dispose();
-        } catch {
-          // Teardown guard
-        }
+          extractAndSyncSheet(localWorkbook);
+        } catch {}
       }
+      queueMicrotask(() => {
+        if (localUniver) {
+          try {
+            localUniver.dispose();
+          } catch {
+            // Teardown guard
+          }
+        }
+        try {
+          container.remove();
+        } catch {}
+      });
       univerRef.current = null;
     };
-  }, [sheet.id]); // Re-initialize only when sheet template changes
+  }, [(sheets || [sheet]).map(s => `${s.id}_${s.rowCount}_${Object.keys(s.cellData || {}).length}`).join('__'), theme, activeSheetId, sheet.id]);
 
   return (
     <div className="flex-1 w-full h-full min-h-0 relative overflow-hidden bg-white dark:bg-[#090d16]">

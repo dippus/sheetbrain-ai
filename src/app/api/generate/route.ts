@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { invokeBedrockAgent } from '@/lib/aws/bedrock';
 import { GOLDEN_TEMPLATES } from '@/lib/templates/goldenTemplates';
 import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
-import { WorkbookModel } from '@/types/sheet';
+import { WorkbookModel, SheetColumn, SheetCell, ChartConfig } from '@/types/sheet';
+import { logCloudWatchMetric } from '@/lib/aws/cloudwatch';
+
+interface BedrockGeneratePayload {
+  title?: string;
+  description?: string;
+  category?: string;
+  columns?: SheetColumn[];
+  cellData?: Record<string, SheetCell>;
+  chartConfig?: ChartConfig;
+}
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await req.json();
     const prompt = body.prompt?.trim() || '';
@@ -44,7 +55,7 @@ Rules:
 }`;
 
     // Attempt cloud Bedrock generation
-    const bedrockResult = await invokeBedrockAgent<any>({
+    const bedrockResult = await invokeBedrockAgent<BedrockGeneratePayload>({
       systemPrompt,
       userPrompt: prompt,
     });
@@ -75,6 +86,13 @@ Rules:
         ],
       };
 
+      logCloudWatchMetric({
+        operation: 'GenerateWorkbook',
+        latencyMs: bedrockResult.latencyMs || (Date.now() - startTime),
+        status: 'SUCCESS',
+        isFallback: false,
+      });
+
       return NextResponse.json({
         success: true,
         workbook: generatedWorkbook,
@@ -83,26 +101,56 @@ Rules:
       });
     }
 
-    // Clean Local Template Fallback
-    const baseTemplate = GOLDEN_TEMPLATES['blank_sheet'];
+    // Smart Zero-Blank-Sheet Fallback Engine (Guarantees living, formula-driven model on any prompt)
+    let baseTemplate = GOLDEN_TEMPLATES['saas_runway'];
+    const pLower = prompt.toLowerCase();
+    if (pLower.includes('git') || pLower.includes('commit') || pLower.includes('velocity') || pLower.includes('code')) {
+      baseTemplate = GOLDEN_TEMPLATES['git_commits'];
+    } else if (pLower.includes('dep') || pLower.includes('package') || pLower.includes('npm') || pLower.includes('dependenc')) {
+      baseTemplate = GOLDEN_TEMPLATES['project_dependencies'];
+    } else if (pLower.includes('sale') || pLower.includes('pipeline') || pLower.includes('quota') || pLower.includes('deal') || pLower.includes('commission')) {
+      baseTemplate = GOLDEN_TEMPLATES['sales_pipeline'];
+    } else {
+      baseTemplate = GOLDEN_TEMPLATES['saas_runway'];
+    }
+
+    const elapsed = Date.now() - startTime;
+    logCloudWatchMetric({
+      operation: 'GenerateWorkbook',
+      latencyMs: elapsed,
+      status: 'SUCCESS',
+      isFallback: true,
+      metadata: { templateKey: baseTemplate.id },
+    });
 
     return NextResponse.json({
       success: true,
       workbook: {
         ...baseTemplate,
         id: `wb_${Date.now()}`,
-        title: prompt ? `Analysis: ${prompt.slice(0, 32)}` : 'Untitled Spreadsheet',
-        description: prompt || 'Clean spreadsheet workspace',
+        title: prompt ? `${prompt.slice(0, 48)}` : baseTemplate.title,
+        description: prompt || baseTemplate.description,
       },
       source: 'local_engine',
-      latencyMs: bedrockResult.latencyMs || 20,
+      latencyMs: bedrockResult.latencyMs || elapsed,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Generation failed';
+    logCloudWatchMetric({
+      operation: 'GenerateWorkbook',
+      latencyMs: Date.now() - startTime,
+      status: 'ERROR',
+      metadata: { error: errorMsg },
+    });
     console.error('[API /generate] Error:', err);
-    return NextResponse.json({
-      success: true,
-      workbook: GOLDEN_TEMPLATES['blank_sheet'],
-      source: 'fallback_safe_default',
-    });
+    return NextResponse.json(
+      {
+        success: false,
+        error: errorMsg,
+        source: 'error',
+      },
+      { status: 500 }
+    );
   }
 }
+

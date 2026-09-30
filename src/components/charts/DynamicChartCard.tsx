@@ -150,12 +150,12 @@ export default function DynamicChartCard({ config, sheet }: DynamicChartCardProp
         <ResponsiveContainer width="100%" height="100%">
           {activeChartType === 'line' ? (
             <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid-line)" />
               <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
               <YAxis stroke="#64748b" fontSize={11} tickFormatter={formatNum} tickLine={false} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'rgba(13,20,34,0.97)', borderColor: '#1e293b', borderRadius: '6px', fontSize: '11px', color: '#f1f5f9' }}
-                formatter={(v: any) => [typeof v === 'number' ? formatNum(v) : v, '']}
+                contentStyle={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--border-color)', borderRadius: '6px', fontSize: '11px', color: 'var(--cell-text)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)' }}
+                formatter={(v: unknown) => [typeof v === 'number' ? formatNum(v) : String(v ?? ''), '']}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {series.map((s) => (
@@ -172,12 +172,12 @@ export default function DynamicChartCard({ config, sheet }: DynamicChartCardProp
             </LineChart>
           ) : activeChartType === 'bar' ? (
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid-line)" />
               <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
               <YAxis stroke="#64748b" fontSize={11} tickFormatter={formatNum} tickLine={false} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'rgba(13,20,34,0.97)', borderColor: '#1e293b', borderRadius: '6px', fontSize: '11px', color: '#f1f5f9' }}
-                formatter={(v: any) => [typeof v === 'number' ? formatNum(v) : v, '']}
+                contentStyle={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--border-color)', borderRadius: '6px', fontSize: '11px', color: 'var(--cell-text)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)' }}
+                formatter={(v: unknown) => [typeof v === 'number' ? formatNum(v) : String(v ?? ''), '']}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {series.map((s) => (
@@ -191,12 +191,12 @@ export default function DynamicChartCard({ config, sheet }: DynamicChartCardProp
             </BarChart>
           ) : (
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--grid-line)" />
               <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
               <YAxis stroke="#64748b" fontSize={11} tickFormatter={formatNum} tickLine={false} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'rgba(13,20,34,0.97)', borderColor: '#1e293b', borderRadius: '6px', fontSize: '11px', color: '#f1f5f9' }}
-                formatter={(v: any) => [typeof v === 'number' ? formatNum(v) : v, '']}
+                contentStyle={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--border-color)', borderRadius: '6px', fontSize: '11px', color: 'var(--cell-text)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)' }}
+                formatter={(v: unknown) => [typeof v === 'number' ? formatNum(v) : String(v ?? ''), '']}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
               {series.map((s) => (

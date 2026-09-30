@@ -1,22 +1,19 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import {
   Trash2,
-  FolderOpen,
-  GitBranch,
-  Folder,
   FileSpreadsheet,
   Plus,
   Upload,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  Layers,
-  Database,
   Search,
-  Server,
-  FileText
+  ChevronDown,
+  HardDrive,
+  TableProperties,
+  Layers,
+  X
 } from 'lucide-react';
 import { WorkbookModel } from '@/types/sheet';
 
@@ -38,6 +35,12 @@ interface WorkspaceSidebarProps {
   onToggleCollapse: () => void;
   datasets?: DatasetItem[];
   onDeleteDataset?: (key: string) => void;
+  activeSheetId?: string;
+  onSelectSheet?: (sheetId: string) => void;
+  onAddSheet?: () => void;
+  onDeleteSheet?: (sheetId: string) => void;
+  onRenameSheet?: (sheetId: string, newName: string) => void;
+  onNewBlankSpreadsheet?: () => void;
 }
 
 export default function WorkspaceSidebar({
@@ -49,225 +52,405 @@ export default function WorkspaceSidebar({
   isCollapsed,
   onToggleCollapse,
   datasets,
-  onDeleteDataset
+  onDeleteDataset,
+  activeSheetId,
+  onSelectSheet,
+  onAddSheet,
+  onNewBlankSpreadsheet,
 }: WorkspaceSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const sectionId = useId();
+  const [expandedSections, setExpandedSections] = useState({
+    sheets: true,
+    datasets: true,
+    info: true,
+  });
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const resetSearch = () => {
+    setSearchQuery('');
+    searchInputRef.current?.focus();
+  };
 
   const defaultDatasets: DatasetItem[] = [
-    { key: 'blank_sheet', label: 'New Blank Spreadsheet', category: 'Workspace', periods: 'Blank', type: 'Blank' },
-    { key: 'Expense-Claims.xlsx', label: 'Expense-Claims.xlsx', category: 'Excel Dataset', periods: '1,001 Rows', type: 'Native XLSX' },
+    { key: 'blank_sheet', label: 'Untitled Spreadsheet 1', category: 'Workspace', periods: 'Blank (1 Sheet)', type: 'Blank' },
   ];
 
   const activeDatasets = datasets || defaultDatasets;
-
-  const filteredTemplates = activeDatasets.filter(t =>
-    t.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.category.toLowerCase().includes(searchQuery.toLowerCase())
+  const query = searchQuery.trim().toLowerCase();
+  const filteredDatasets = activeDatasets.filter(t =>
+    !query || t.label.toLowerCase().includes(query) || t.category.toLowerCase().includes(query)
   );
+
+  const sheetsList = currentWorkbook?.sheets || [];
+  const currentActiveSheetId = activeSheetId || sheetsList[0]?.id || 'sheet_1';
+
+  const filteredSheets = sheetsList.filter(s =>
+    !query || (s.name || '').toLowerCase().includes(query)
+  );
+
+  const noMatches = query.length > 0 && filteredDatasets.length === 0 && filteredSheets.length === 0;
+  const workbookTitle = currentWorkbook?.title || customImportName || 'Active spreadsheet';
+  const focusStyle = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]';
+  const selectionStyle = (isActive: boolean) => isActive
+    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] font-semibold shadow-xs'
+    : 'border-transparent text-[var(--cell-text)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]';
+  const sectionStyle = `flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-xs font-semibold text-[var(--cell-muted)] transition-colors duration-150 hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] ${focusStyle}`;
+  const railStyle = `flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ${focusStyle}`;
 
   if (isCollapsed) {
     return (
-      <aside className="w-12 bg-white dark:bg-[#0c121e] border-r border-slate-200 dark:border-[#1e293b] flex flex-col items-center py-3 select-none justify-between transition-colors shrink-0">
-        <div className="flex flex-col items-center gap-3">
+      <aside aria-label="Workspace sidebar" className="flex h-full min-h-0 w-14 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)]">
+        <header className="flex shrink-0 flex-col items-center gap-2 border-b border-[var(--border-color)] px-1 py-3">
+          <div aria-label="SheetBrain AI" role="img" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+            <TableProperties aria-hidden="true" className="h-5 w-5" />
+          </div>
           <button
+            type="button"
             onClick={onToggleCollapse}
-            title="Expand Workspace Navigator"
-            className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-[#1a2333] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+            aria-label="Expand Sidebar"
+            title="Expand Sidebar"
+            className={`${railStyle} ${selectionStyle(false)}`}
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight aria-hidden="true" className="h-4 w-4" />
           </button>
-          <div className="w-6 h-px bg-slate-200 dark:bg-[#1e293b]" />
-          {activeDatasets.slice(0, 6).map((d) => (
+        </header>
+
+        {/* Collapsed Rail Navigation: Active Sheets */}
+        <nav aria-label="Active sheet tabs" className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden px-1 py-2">
+          <div className="text-[9px] font-bold text-[var(--cell-muted)] uppercase tracking-wider py-1 select-none">Sheets</div>
+          {sheetsList.map((s, idx) => {
+            const isActive = s.id === currentActiveSheetId;
+            return (
+              <button
+                type="button"
+                key={s.id}
+                onClick={() => onSelectSheet?.(s.id)}
+                aria-label={s.name || `Sheet ${idx + 1}`}
+                aria-current={isActive ? 'true' : undefined}
+                title={`${s.name || `Sheet ${idx + 1}`} (${s.rowCount || 0} rows)`}
+                className={`${railStyle} ${selectionStyle(isActive)}`}
+              >
+                <span className="text-xs font-mono font-bold">{idx + 1}</span>
+              </button>
+            );
+          })}
+          {onAddSheet && (
             <button
+              type="button"
+              onClick={onAddSheet}
+              aria-label="Add Sheet Tab"
+              title="Add New Sheet Tab"
+              className={`${railStyle} text-[var(--cell-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)]`}
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+            </button>
+          )}
+
+          <div className="my-2 h-px w-6 bg-[var(--border-color)]" />
+          <div className="text-[9px] font-bold text-[var(--cell-muted)] uppercase tracking-wider py-1 select-none">Files</div>
+          <button
+            type="button"
+            onClick={onNewBlankSpreadsheet || (() => onSelectTemplate('blank_sheet'))}
+            aria-label="New Blank Spreadsheet"
+            aria-current={activeTemplateKey.startsWith('blank_') ? 'true' : undefined}
+            title="Create New Blank Spreadsheet"
+            className={`${railStyle} ${selectionStyle(activeTemplateKey.startsWith('blank_'))}`}
+          >
+            <Plus aria-hidden="true" className="h-4 w-4" />
+          </button>
+          {activeDatasets.slice(0, 5).map(d => (
+            <button
+              type="button"
               key={d.key}
               onClick={() => onSelectTemplate(d.key)}
+              aria-label={d.label}
+              aria-current={activeTemplateKey === d.key ? 'true' : undefined}
               title={d.label}
-              className={`p-2 rounded transition ${
-                activeTemplateKey === d.key
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1a2333]'
-              }`}
+              className={`${railStyle} ${selectionStyle(activeTemplateKey === d.key)}`}
             >
-              {d.key === 'blank_sheet' ? (
-                <Plus className="w-4 h-4" />
-              ) : (
-                <FileSpreadsheet className="w-4 h-4" />
-              )}
+              <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />
             </button>
           ))}
-        </div>
-        <button
-          onClick={onUploadClick}
-          title="Upload CSV / XLSX"
-          className="p-2 rounded hover:bg-slate-100 dark:hover:bg-[#1a2333] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
-        >
-          <Upload className="w-4 h-4" />
-        </button>
+        </nav>
+
+        <footer className="flex shrink-0 justify-center border-t border-[var(--border-color)] p-1 py-3">
+          <button
+            type="button"
+            onClick={onUploadClick}
+            aria-label="Import CSV / XLSX Files"
+            title="Import CSV / XLSX Files"
+            className={`${railStyle} border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-contrast)] hover:opacity-90`}
+          >
+            <Upload aria-hidden="true" className="h-4 w-4" />
+          </button>
+        </footer>
       </aside>
     );
   }
 
   return (
-    <aside className="w-64 bg-slate-50 dark:bg-[#0c121e] border-r border-slate-200 dark:border-[#1e293b] flex flex-col justify-between text-xs text-slate-700 dark:text-slate-300 select-none transition-colors shrink-0">
-      <div className="flex flex-col min-h-0">
-        {/* Workspace Brand & Header */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-slate-200 dark:border-[#1e293b]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded bg-blue-600 flex items-center justify-center text-white shadow-sm font-bold text-xs tracking-tight">
-              SB
+    <aside aria-label="Workspace sidebar" className="flex h-full min-h-0 w-64 md:w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)]">
+      <header className="shrink-0 border-b border-[var(--border-color)]">
+        <div className="flex min-w-0 items-center gap-2 px-3 py-3.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+            <TableProperties aria-hidden="true" className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="studio-brand truncate text-base font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+              SheetBrain AI
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs tracking-tight">
-                  SheetBrain Pro
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block ">
-                Desktop Spreadsheet
-              </span>
-            </div>
+            <p className="truncate text-xs leading-4 text-[var(--cell-muted)]" title="Spreadsheet intelligence">
+              Spreadsheet intelligence
+            </p>
           </div>
           <button
+            type="button"
             onClick={onToggleCollapse}
-            title="Collapse Sidebar (Alt+[)"
-            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-[#1a2333] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+            aria-label="Collapse Sidebar"
+            title="Collapse Sidebar"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--cell-muted)] transition-colors duration-150 hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] ${focusStyle}`}
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
-
-        {/* Model Filter Search Input */}
-        <div className="p-2 border-b border-slate-200 dark:border-[#1e293b]">
+        <div className="px-3 pb-3">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-[var(--cell-muted)]" />
             <input
-              type="text"
+              ref={searchInputRef}
+              id="workspace-search-input"
+              name="workspaceSearch"
+              type="search"
+              aria-label="Search datasets and files"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search datasets & sheets..."
-              className="w-full bg-white dark:bg-[#151e2e] border border-slate-200 dark:border-[#223049] rounded px-2.5 py-1.5 pl-8 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition"
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setExpandedSections(prev => ({ ...prev, sheets: true, datasets: true }));
+              }}
+              placeholder="Search sheets & files..."
+              className={`h-10 w-full min-w-0 rounded-lg border border-[var(--border-color)] bg-[var(--app-bg)] pl-9 pr-11 text-xs text-[var(--cell-text)] placeholder:text-[var(--cell-muted)] transition-colors duration-150 [&::-webkit-search-cancel-button]:appearance-none ${focusStyle}`}
             />
-          </div>
-        </div>
-
-        {/* Financial Models Section */}
-        <div className="p-2 overflow-y-auto max-h-[calc(100vh-270px)]">
-          <div className="flex items-center justify-between px-1 py-1 mb-1">
-            <span className="text-[10px] font-bold font-medium text-slate-400 dark:text-slate-500">
-              Local Datasets (data/)
-            </span>
-            <span className="text-[10px] bg-slate-200 dark:bg-[#1e293b] text-slate-600 dark:text-slate-400 px-1.5 py-0.2 rounded ">
-              {activeDatasets.length}
-            </span>
-          </div>
-
-          <div className="space-y-0.5">
-            {filteredTemplates.map((t) => {
-              const isActive = activeTemplateKey === t.key;
-              const isDeletable = t.key !== 'blank_sheet';
-
-              return (
-                <div
-                  key={t.key}
-                  onClick={() => onSelectTemplate(t.key)}
-                  className={`w-full text-left px-2.5 py-2 rounded text-xs transition flex items-center justify-between group cursor-pointer ${
-                    isActive
-                      ? 'bg-blue-600 text-white font-medium shadow-sm'
-                      : 'hover:bg-slate-200/70 dark:hover:bg-[#162031] text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <FileSpreadsheet className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
-                    <span className="truncate">{t.label}</span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-1">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      isActive
-                        ? 'bg-blue-700 text-blue-100'
-                        : 'bg-slate-200/60 dark:bg-[#1e293b] text-slate-500 dark:text-slate-400 group-hover:bg-slate-300/60'
-                    }`}>
-                      {t.periods}
-                    </span>
-                    {isDeletable && onDeleteDataset && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteDataset(t.key);
-                        }}
-                        title={`Delete ${t.label} from workspace`}
-                        className={`p-1 rounded opacity-0 group-hover:opacity-100 transition ${
-                          isActive
-                            ? 'hover:bg-blue-700 text-white'
-                            : 'hover:bg-red-100 dark:hover:bg-red-950/60 text-slate-400 hover:text-red-500'
-                        }`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Custom Imported File Pill */}
-            {customImportName && (
+            {searchQuery && (
               <button
-                onClick={() => onSelectTemplate('imported')}
-                className={`w-full text-left px-2.5 py-2 rounded text-xs transition flex items-center justify-between ${
-                  activeTemplateKey === 'imported'
-                    ? 'bg-blue-600 text-white font-medium shadow-sm'
-                    : 'hover:bg-slate-200/70 dark:hover:bg-[#162031] text-slate-700 dark:text-slate-300'
-                }`}
+                type="button"
+                onClick={resetSearch}
+                aria-label="Clear search"
+                title="Clear search"
+                className={`absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-[var(--cell-muted)] transition-colors duration-150 hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] ${focusStyle}`}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <Database className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span className="truncate">{customImportName}</span>
-                </div>
-                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded ">
-                  Custom
-                </span>
+                <X aria-hidden="true" className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
-
-          {/* Active Sheets in Current Workbook */}
-          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-[#1e293b]">
-            <div className="px-1 py-1 mb-1">
-              <span className="text-[10px] font-bold font-medium text-slate-400 dark:text-slate-500">
-                Current Workbook
-              </span>
-            </div>
-            <div className="px-2 py-1.5 bg-white dark:bg-[#131b2a] rounded border border-slate-200 dark:border-[#1e293b] space-y-1">
-              <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                {currentWorkbook.title}
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 ">
-                {(currentWorkbook?.sheets || []).length} Sheet(s) · {(currentWorkbook?.sheets?.[0]?.columns || []).length} Col x {currentWorkbook?.sheets?.[0]?.rowCount || 0} Row
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Footer / Engine Status */}
-      <div className="p-3 border-t border-slate-200 dark:border-[#1e293b] bg-slate-100/70 dark:bg-[#0a0f19] space-y-2">
+      <nav aria-label="Workspace navigation" className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-3">
+        {/* Quick New Blank Spreadsheet Button */}
         <button
-          onClick={onUploadClick}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-white dark:bg-[#162031] hover:bg-slate-100 dark:hover:bg-[#1e2a40] text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-[#223049] font-medium text-xs transition shadow-sm"
+          type="button"
+          onClick={onNewBlankSpreadsheet || (() => onSelectTemplate('blank_sheet'))}
+          aria-label="New Blank Spreadsheet"
+          className={`flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg border bg-[var(--accent)] text-[var(--accent-contrast)] hover:opacity-90 px-3 py-2 text-left text-xs font-semibold shadow-xs transition-opacity duration-150 ${focusStyle}`}
         >
-          <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-          <span>Import CSV / TSV</span>
+          <Plus aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span className="truncate">New blank spreadsheet</span>
         </button>
 
-        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400  pt-1">
-          <div className="flex items-center gap-1">
-            <Server className="w-3 h-3 text-blue-500" />
-            <span>Local WASM Engine</span>
+        {noMatches ? (
+          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--panel-subtle)] p-3">
+            <div role="status">
+              <p className="text-xs font-semibold">No matches found</p>
+              <p className="mt-1 text-[11px] leading-4 text-[var(--cell-muted)]">Try another keyword or reset search to view all sheets & files.</p>
+            </div>
+            <button
+              type="button"
+              onClick={resetSearch}
+              className={`mt-2.5 min-h-9 w-full rounded-lg bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] transition-colors duration-150 hover:bg-[var(--accent)] hover:text-[var(--accent-contrast)] ${focusStyle}`}
+            >
+              Reset search
+            </button>
           </div>
-          <span className="text-blue-600 dark:text-blue-400 font-bold">60 FPS</span>
-        </div>
-      </div>
+        ) : (
+          <>
+            {/* 1. Sheets in Active Workbook Section */}
+            <section className="rounded-xl border border-[var(--border-color)] bg-[var(--panel-subtle)]/50 p-2">
+              <div className="flex items-center justify-between px-1 mb-1.5">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('sheets')}
+                  aria-expanded={expandedSections.sheets}
+                  aria-controls={`${sectionId}-sheets`}
+                  className="flex items-center gap-2 text-left text-xs font-semibold text-[var(--cell-muted)] hover:text-[var(--accent)] transition-colors"
+                >
+                  <Layers aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
+                  <span className="truncate">Workbook Sheets</span>
+                  <span className="font-mono tabular-nums px-1.5 py-0.2 bg-[var(--accent-soft)] text-[var(--accent)] text-[10px] font-bold rounded-full">
+                    {sheetsList.length}
+                  </span>
+                  <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${expandedSections.sheets ? '' : '-rotate-90'}`} />
+                </button>
+                {onAddSheet && (
+                  <button
+                    type="button"
+                    onClick={onAddSheet}
+                    title="Add new sheet tab"
+                    className="p-1 rounded-md text-[var(--cell-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div id={`${sectionId}-sheets`} hidden={!expandedSections.sheets} className="space-y-1">
+                {filteredSheets.map((s, idx) => {
+                  const isActive = s.id === currentActiveSheetId;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`group flex min-w-0 items-center justify-between rounded-lg border transition-all duration-150 ${selectionStyle(isActive)}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onSelectSheet?.(s.id)}
+                        className={`flex min-h-10 min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left ${focusStyle}`}
+                      >
+                        <FileSpreadsheet className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-[var(--accent)]' : 'text-[var(--cell-muted)]'}`} />
+                        <div className="min-w-0 flex-1">
+                          <span className={`block truncate text-xs font-semibold ${isActive ? 'text-[var(--accent)]' : 'text-[var(--cell-text)]'}`}>
+                            {s.name || `Sheet ${idx + 1}`}
+                          </span>
+                          <span className="block text-[10px] text-[var(--cell-muted)] font-mono tabular-nums">
+                            {s.rowCount || 0} rows · {(s.columns || []).length} cols
+                          </span>
+                        </div>
+                        {isActive && (
+                          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.5 rounded border border-[var(--accent)]/30">
+                            Active
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 2. Datasets & Files Section */}
+            <section>
+              <h2>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('datasets')}
+                  aria-expanded={expandedSections.datasets}
+                  aria-controls={`${sectionId}-datasets`}
+                  className={sectionStyle}
+                >
+                  <HardDrive aria-hidden="true" className="h-4 w-4 shrink-0 text-cyan-500" />
+                  <span className="min-w-0 flex-1 truncate">Datasets & files</span>
+                  <span className="font-mono tabular-nums">{filteredDatasets.length}</span>
+                  <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none ${expandedSections.datasets ? '' : '-rotate-90'}`} />
+                </button>
+              </h2>
+              <div id={`${sectionId}-datasets`} hidden={!expandedSections.datasets} className="mt-1 space-y-1">
+                {filteredDatasets.length === 0 ? (
+                  <p className="px-2 py-2 text-xs leading-4 text-[var(--cell-muted)]">
+                    {query ? 'No matching datasets.' : 'Import a workbook to get started.'}
+                  </p>
+                ) : filteredDatasets.map(t => {
+                  const isActive = activeTemplateKey === t.key;
+                  return (
+                    <div key={t.key} className={`flex min-w-0 items-center rounded-lg border transition-colors duration-150 ${selectionStyle(isActive)}`}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectTemplate(t.key)}
+                        aria-label={t.label}
+                        aria-current={isActive ? 'true' : undefined}
+                        title={t.label}
+                        className={`flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left ${focusStyle}`}
+                      >
+                        <FileSpreadsheet aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--accent)]" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-semibold">{t.label}</span>
+                          <span className="mt-0.5 block truncate text-[11px] text-[var(--cell-muted)]" title={`${t.category} · ${t.periods}`}>
+                            {t.category}<span aria-hidden="true"> · </span><span className="font-mono tabular-nums">{t.periods}</span>
+                          </span>
+                        </span>
+                      </button>
+                      {onDeleteDataset && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteDataset(t.key)}
+                          aria-label={`Delete ${t.label}`}
+                          title={`Delete ${t.label}`}
+                          className={`mr-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--cell-muted)] transition-colors duration-150 hover:bg-[var(--panel-subtle)] hover:text-rose-500 ${focusStyle}`}
+                        >
+                          <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* 3. Current Workbook Info */}
+        <section className="border-t border-[var(--border-color)] pt-3">
+          <h2>
+            <button
+              type="button"
+              onClick={() => toggleSection('info')}
+              aria-expanded={expandedSections.info}
+              aria-controls={`${sectionId}-info`}
+              className={sectionStyle}
+            >
+              <TableProperties aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Current workbook</span>
+              <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 motion-reduce:transition-none ${expandedSections.info ? '' : '-rotate-90'}`} />
+            </button>
+          </h2>
+          <div id={`${sectionId}-info`} hidden={!expandedSections.info} className="mt-1 rounded-lg border border-[var(--border-color)] bg-[var(--panel-subtle)] p-2.5">
+            <p className="truncate text-xs font-semibold" title={workbookTitle}>{workbookTitle}</p>
+            <dl className="mt-2.5 space-y-1.5 text-xs">
+              <div className="flex min-w-0 items-baseline justify-between gap-3">
+                <dt className="text-[var(--cell-muted)]">Active sheet</dt>
+                <dd className="min-w-0 truncate font-mono font-medium text-[var(--accent)]">
+                  {sheetsList.find(s => s.id === currentActiveSheetId)?.name || 'Sheet1'}
+                </dd>
+              </div>
+              <div className="flex min-w-0 items-baseline justify-between gap-3">
+                <dt className="text-[var(--cell-muted)]">Total sheets</dt>
+                <dd className="min-w-0 truncate font-mono tabular-nums font-medium">{sheetsList.length}</dd>
+              </div>
+              <div className="flex min-w-0 items-baseline justify-between gap-3">
+                <dt className="shrink-0 text-[var(--cell-muted)]">Grid dimensions</dt>
+                <dd className="min-w-0 truncate font-mono tabular-nums" title="Columns × rows">
+                  {(sheetsList.find(s => s.id === currentActiveSheetId)?.columns || []).length}C × {sheetsList.find(s => s.id === currentActiveSheetId)?.rowCount || 0}R
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      </nav>
+
+      <footer className="shrink-0 space-y-2 border-t border-[var(--border-color)] bg-[var(--panel-bg)] p-3">
+        <button
+          type="button"
+          onClick={onUploadClick}
+          title="Import CSV / XLSX Files"
+          className={`flex min-h-10 w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-contrast)] transition-opacity duration-150 hover:opacity-90 ${focusStyle}`}
+        >
+          <Upload aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span className="truncate">Import workbook (CSV / XLSX)</span>
+        </button>
+      </footer>
     </aside>
   );
 }
