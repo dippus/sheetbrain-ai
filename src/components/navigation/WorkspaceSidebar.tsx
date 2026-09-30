@@ -261,7 +261,7 @@ export default function WorkspaceSidebar({
           type="button"
           onClick={onNewBlankSpreadsheet || (() => onSelectTemplate('blank_sheet'))}
           aria-label="New Blank Spreadsheet"
-          className={`flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg border bg-[var(--accent)] text-[var(--accent-contrast)] hover:opacity-90 px-3 py-2 text-left text-xs font-semibold shadow-xs transition-opacity duration-150 ${focusStyle}`}
+          className="flex min-h-10 w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white px-3 py-2 text-xs font-semibold shadow-md shadow-cyan-950/20 transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <Plus aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="truncate">New blank spreadsheet</span>
@@ -382,13 +382,18 @@ export default function WorkspaceSidebar({
               </h2>
               <div id={`${sectionId}-datasets`} hidden={!expandedSections.datasets} className="mt-1 space-y-1">
                 {filteredDatasets.length === 0 ? (
-                  <p className="px-2 py-2 text-xs leading-4 text-[var(--cell-muted)]">
-                    {query ? 'No matching datasets.' : 'Import a workbook to get started.'}
-                  </p>
+                  <div className="rounded-lg border border-[var(--border-color)] bg-[var(--panel-subtle)] p-3 text-center">
+                    <p className="text-xs text-[var(--cell-muted)] font-medium">
+                      {query ? 'No matching datasets found.' : 'No datasets saved.'}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[var(--cell-muted)]">
+                      Paste or enter your data in the grid, or click "+ New blank spreadsheet".
+                    </p>
+                  </div>
                 ) : filteredDatasets.map(t => {
                   const isActive = activeTemplateKey === t.key;
                   return (
-                    <div key={t.key} className={`flex min-w-0 items-center rounded-lg border transition-colors duration-150 ${selectionStyle(isActive)}`}>
+                    <div key={t.key} className={`group flex min-w-0 items-center rounded-lg border transition-colors duration-150 ${selectionStyle(isActive)}`}>
                       <button
                         type="button"
                         onClick={() => onSelectTemplate(t.key)}
@@ -397,7 +402,7 @@ export default function WorkspaceSidebar({
                         title={t.label}
                         className={`flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left ${focusStyle}`}
                       >
-                        <FileSpreadsheet aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--accent)]" />
+                        <FileSpreadsheet aria-hidden="true" className="h-4 w-4 shrink-0 text-cyan-400" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-semibold">{t.label}</span>
                           <span className="mt-0.5 block truncate text-[11px] text-[var(--cell-muted)]" title={`${t.category} · ${t.periods}`}>
@@ -408,10 +413,13 @@ export default function WorkspaceSidebar({
                       {onDeleteDataset && (
                         <button
                           type="button"
-                          onClick={() => onDeleteDataset(t.key)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteDataset(t.key);
+                          }}
                           aria-label={`Delete ${t.label}`}
-                          title={`Delete ${t.label}`}
-                          className={`mr-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--cell-muted)] transition-colors duration-150 hover:bg-[var(--panel-subtle)] hover:text-rose-500 ${focusStyle}`}
+                          title={`Delete ${t.label} and reset page`}
+                          className={`mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/15 transition-colors duration-150 ${focusStyle}`}
                         >
                           <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
                         </button>
@@ -468,7 +476,7 @@ export default function WorkspaceSidebar({
           type="button"
           onClick={onUploadClick}
           title="Import CSV / XLSX Files"
-          className={`flex min-h-10 w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-contrast)] transition-opacity duration-150 hover:opacity-90 ${focusStyle}`}
+          className="flex min-h-10 w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 px-3 py-2 text-xs font-semibold transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <Upload aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="truncate">Import workbook (CSV / XLSX)</span>
@@ -477,15 +485,15 @@ export default function WorkspaceSidebar({
           <button
             type="button"
             onClick={() => {
-              if (window.confirm('Clear all saved data and start fresh? This cannot be undone.')) {
+              if (window.confirm('Clear all datasets from sidebar and start with a clean empty sheet?')) {
                 onClearAllData();
               }
             }}
-            title="Clear all saved workbook data and reset to blank state"
-            className={`flex min-h-9 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 transition-colors duration-150 hover:bg-red-100 dark:hover:bg-red-950/60 ${focusStyle}`}
+            title="Clear all datasets and reset to a clean blank spreadsheet"
+            className="flex min-h-9 w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 px-3 py-1.5 text-xs font-semibold transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
           >
             <Trash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Clear All Data</span>
+            <span className="truncate">Clear All Datasets</span>
           </button>
         )}
       </footer>

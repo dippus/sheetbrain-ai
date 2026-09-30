@@ -89,16 +89,61 @@ function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[
 
       const isNumeric = typeof cell.v === 'number';
       const isModified = !!cell.isModified;
+      const isHeaderRow = rowIdx === 0;
+      const isSummaryRow = !isHeaderRow && !!cell.bold;
+
+      let fontColor: string;
+      if (isModified) {
+        fontColor = isDark ? '#60a5fa' : '#1d4ed8';
+      } else if (cell.fontColor) {
+        fontColor = cell.fontColor;
+      } else if (isHeaderRow) {
+        fontColor = isDark ? '#38bdf8' : '#0284c7';
+      } else if (isSummaryRow) {
+        fontColor = isDark ? '#34d399' : '#059669';
+      } else {
+        fontColor = isDark ? '#f8fafc' : '#0f172a';
+      }
+
+      let bgColor: string | undefined;
+      if (isModified) {
+        bgColor = isDark ? '#172554' : '#dbeafe';
+      } else if (cell.bg) {
+        bgColor = cell.bg;
+      } else if (isHeaderRow) {
+        bgColor = isDark ? '#0f172a' : '#f1f5f9';
+      } else {
+        bgColor = undefined;
+      }
+
       univerCellData[rowIdx][colIdx] = {
         v: cell.v,
         f: cell.f,
         s: {
-          bl: cell.bold || isModified ? 1 : undefined,
+          bl: isHeaderRow || isSummaryRow || cell.bold || isModified ? 1 : undefined,
           ht: cell.align === 'center' ? 2 : cell.align === 'right' || isNumeric ? 3 : 1,
-          bg: isModified ? (isDark ? { rgb: '#172554' } : { rgb: '#dbeafe' }) : (cell.bg ? { rgb: cell.bg } : undefined),
-          cl: isModified ? (isDark ? { rgb: '#60a5fa' } : { rgb: '#1d4ed8' }) : (cell.fontColor ? { rgb: cell.fontColor } : undefined),
+          bg: bgColor ? { rgb: bgColor } : undefined,
+          cl: { rgb: fontColor },
         },
       };
+    });
+
+    // Ensure header row from safeColumns is populated and brightly styled if row 0 was empty
+    safeColumns.forEach((col, cIdx) => {
+      if (!univerCellData[0]) {
+        univerCellData[0] = {};
+      }
+      if (!univerCellData[0][cIdx] || univerCellData[0][cIdx].v === undefined) {
+        univerCellData[0][cIdx] = {
+          v: col.label,
+          s: {
+            bl: 1,
+            ht: col.type === 'string' ? 1 : 3,
+            bg: isDark ? { rgb: '#0f172a' } : { rgb: '#f1f5f9' },
+            cl: { rgb: isDark ? '#38bdf8' : '#0284c7' },
+          },
+        };
+      }
     });
 
     // Column width configurations

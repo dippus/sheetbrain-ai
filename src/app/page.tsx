@@ -253,29 +253,31 @@ export default function SheetBrainStudio() {
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch (e) {}
 
-    // Reset to a pristine blank state
+    // Reset to completely empty datasets and a clean blank sheet
     const cleanKey = `blank_sheet_${Date.now()}`;
     const cleanWb: WorkbookModel = {
       ...GOLDEN_TEMPLATES['blank_sheet'],
       id: cleanKey,
-      title: 'New Blank Spreadsheet',
+      title: 'Sheet 1',
       sheets: [{ ...createCleanBlankSheet(1), id: 'sheet_1', name: 'Sheet 1' }],
     };
-    const freshDataset: DatasetItem = {
-      key: cleanKey,
-      label: 'New Blank Spreadsheet',
-      category: 'Workspace',
-      periods: 'Blank',
-      type: 'Blank',
-    };
 
-    setDatasets([freshDataset]);
+    setDatasets([]);
+    try {
+      localStorage.setItem('sheetbrain_datasets', JSON.stringify([]));
+      localStorage.setItem('sheetbrain_active_workbook', JSON.stringify(cleanWb));
+      localStorage.setItem('sheetbrain_active_template_key', cleanKey);
+      localStorage.setItem('sheetbrain_active_sheet_id', 'sheet_1');
+    } catch (e) {}
+
     setCurrentWorkbook(cleanWb);
     setActiveTemplateKey(cleanKey);
     setActiveSheetId('sheet_1');
+    setCustomImportName(null);
+    setActiveScenario(undefined);
     setActiveView('grid');
     setGridRevision(r => r + 1);
-    showToast('🗑️ All data cleared — fresh blank workspace ready');
+    showToast('🗑️ All datasets cleared — clean blank spreadsheet ready');
   }, [showToast]);
 
   // 5. Template & Local File Selector Callback (Real disk reading via /api/local-data)
@@ -485,11 +487,13 @@ export default function SheetBrainStudio() {
         }
       }
 
-      if (savedDatasets) {
-        const parsed = JSON.parse(savedDatasets);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setDatasets(parsed);
-        }
+      if (savedDatasets !== null) {
+        try {
+          const parsed = JSON.parse(savedDatasets);
+          if (Array.isArray(parsed)) {
+            setDatasets(parsed);
+          }
+        } catch (e) {}
       }
 
       const savedTheme = localStorage.getItem('sheetbrain_theme') as 'dark' | 'light' | 'system' | null;
@@ -682,33 +686,30 @@ export default function SheetBrainStudio() {
       localStorage.setItem('sheetbrain_datasets', JSON.stringify(remaining));
     } catch (e) {}
 
+    // When the active dataset is deleted, clean the page and reset to a clean blank Sheet 1
+    // so the user has an empty canvas to add their own data, instead of auto-loading another model!
     if (activeTemplateKey === key) {
-      if (remaining.length > 0) {
-        handleSelectTemplate(remaining[0].key);
-      } else {
-        const freshKey = `blank_sheet_${Date.now()}`;
-        const freshWb: WorkbookModel = {
-          ...GOLDEN_TEMPLATES['blank_sheet'],
-          id: freshKey,
-          title: 'Sheet 1',
-          sheets: [{ ...createCleanBlankSheet(1), id: 'sheet_1', name: 'Sheet 1' }],
-        };
-        const freshItem: DatasetItem = {
-          key: freshKey,
-          label: 'Sheet 1',
-          category: 'Workspace',
-          periods: 'Blank (1 Sheet)',
-          type: 'Blank',
-        };
-        setDatasets([freshItem]);
-        setCurrentWorkbook(freshWb);
-        setActiveTemplateKey(freshKey);
-        setActiveSheetId('sheet_1');
-        setGridRevision(r => r + 1);
-      }
+      const freshKey = `blank_sheet_${Date.now()}`;
+      const freshWb: WorkbookModel = {
+        ...GOLDEN_TEMPLATES['blank_sheet'],
+        id: freshKey,
+        title: 'Sheet 1',
+        sheets: [{ ...createCleanBlankSheet(1), id: 'sheet_1', name: 'Sheet 1' }],
+      };
+      setCurrentWorkbook(freshWb);
+      setActiveTemplateKey(freshKey);
+      setActiveSheetId('sheet_1');
+      setCustomImportName(null);
+      setActiveScenario(undefined);
+      setGridRevision(r => r + 1);
+      try {
+        localStorage.setItem('sheetbrain_active_workbook', JSON.stringify(freshWb));
+        localStorage.setItem('sheetbrain_active_template_key', freshKey);
+        localStorage.setItem('sheetbrain_active_sheet_id', 'sheet_1');
+      } catch (e) {}
     }
-    showToast(`Deleted spreadsheet from workspace`);
-  }, [datasets, activeTemplateKey, handleSelectTemplate, showToast]);
+    showToast(`Deleted from workspace — clean blank sheet ready`);
+  }, [datasets, activeTemplateKey, showToast]);
 
   const handleRenameSheet = useCallback((sheetId: string, newName: string) => {
     if (!newName.trim()) return;
