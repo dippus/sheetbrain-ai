@@ -2,10 +2,10 @@
 
 > **Transform Natural Language into Living, Formula-Driven Spreadsheets & Visual Dashboards in Seconds.**
 
-🚀 **Live Deployment**: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
+🚀 **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
 
 [![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20deepseek.v3.2-orange.svg)](https://aws.amazon.com/bedrock/)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-AWS%20Amplify-success.svg)](https://main.d36a9s34xgy54i.amplifyapp.com)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-AWS%20Amplify-success.svg)](https://main.ddro9iqx1ajmw.amplifyapp.com)
 [![Univer Office SDK](https://img.shields.io/badge/Univer-Office%20SDK-blue.svg)](https://univer.ai/)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14%20App%20Router-black.svg)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)

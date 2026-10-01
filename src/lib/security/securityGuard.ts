@@ -231,8 +231,11 @@ export function detectPromptInjection(input: string): PromptSecurityResult {
 // 3. BROWSER CSRF ORIGIN VALIDATOR
 // ==============================================================================
 
-/** Exact production domain (NO wildcard *.amplifyapp.com allowed) */
-const EXACT_PRODUCTION_DOMAIN = 'main.d36a9s34xgy54i.amplifyapp.com';
+/** Exact production domains allowed (NO broad wildcard *.amplifyapp.com allowed) */
+const ALLOWED_PRODUCTION_DOMAINS = new Set([
+  'main.ddro9iqx1ajmw.amplifyapp.com', // Live AWS Amplify production deployment
+  'main.d36a9s34xgy54i.amplifyapp.com', // Alternate deployment alias
+]);
 
 /**
  * Validates Origin / Referer for browser-initiated state-changing API endpoints.
@@ -258,9 +261,15 @@ export function isAllowedOrigin(req: NextRequest): boolean {
       return true;
     }
 
-    // Allow ONLY our exact production domain (no broad wildcard that permits rogue Amplify apps)
-    if (host === EXACT_PRODUCTION_DOMAIN) {
+    // Allow ONLY our exact production domains (blocks rogue *.amplifyapp.com apps)
+    if (ALLOWED_PRODUCTION_DOMAINS.has(host)) {
       return true;
+    }
+
+    // Allow dynamic AWS branch/app if set via environment
+    if (process.env.AWS_APP_ID) {
+      const expectedHost = `${process.env.AWS_BRANCH || 'main'}.${process.env.AWS_APP_ID}.amplifyapp.com`.toLowerCase();
+      if (host === expectedHost) return true;
     }
 
     // Allow custom deployment domain if configured

@@ -17,7 +17,7 @@
 
 ## 2. Technical & Ship Gates
 - [x] **AI Coding Agent Connected**: Documented proof of AI assistant usage established in [`docs/18_TASKS.md`](./18_TASKS.md) and [`docs/22_AI_DEVELOPMENT_LOG.md`](./22_AI_DEVELOPMENT_LOG.md).
-- [x] **App Live on AWS (Ship Gate)**: Application deployed on AWS Amplify with active public HTTPS URL: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com).
+- [x] **App Live on AWS (Ship Gate)**: Application deployed on AWS Amplify with active public HTTPS URL: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com).
 - [x] **Public Access Verified**: URL loads in an incognito window with zero login or password barrier (Guest access active).
 - [x] **AWS Services Documented**: Explicit documentation of Amazon Bedrock Mantle (`deepseek.v3.2` / `ap-southeast-2`), CloudWatch EMF, S3 resilient storage, and Amplify in [`docs/09_AWS_ARCHITECTURE.md`](./09_AWS_ARCHITECTURE.md).
 - [x] **Open Source Code**: GitHub repository is public: [https://github.com/sajankuma7000-art/sheetbrain-ai](https://github.com/sajankuma7000-art/sheetbrain-ai) and contains official [`LICENSE`](../LICENSE) (MIT).

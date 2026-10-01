@@ -70,14 +70,15 @@ function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[
 
     const univerCellData: Record<number, Record<number, UniverCellRaw>> = {};
 
-    // Map user and template cells directly: A1 -> row 0, col 0; B2 -> row 1, col 1
-    Object.entries(s.cellData || {}).forEach(([coord, cell]) => {
+    const rawCells = s.cellData || {};
+    for (const coord in rawCells) {
+      const cell = rawCells[coord];
       const p = parseCoord(coord);
-      if (!p) return;
+      if (!p) continue;
       const colIdx = colToIndex(p.col);
       const rowIdx = p.row - 1;
 
-      if (rowIdx < 0 || colIdx < 0) return;
+      if (rowIdx < 0 || colIdx < 0) continue;
 
       if (!univerCellData[rowIdx]) {
         univerCellData[rowIdx] = {};
@@ -87,6 +88,15 @@ function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[
       const isModified = !!cell.isModified;
       const isHeaderRow = rowIdx === 0;
       const isSummaryRow = !isHeaderRow && !!cell.bold;
+
+      // High-performance fast-path: standard unstyled data cells skip style object allocation
+      if (!isModified && !cell.fontColor && !isHeaderRow && !isSummaryRow && !cell.bg && !cell.bold && !cell.align && !isNumeric) {
+        univerCellData[rowIdx][colIdx] = {
+          v: cell.v,
+          f: cell.f,
+        };
+        continue;
+      }
 
       let fontColor: string;
       if (isModified) {
@@ -122,7 +132,7 @@ function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[
           cl: { rgb: fontColor },
         },
       };
-    });
+    }
 
     // Ensure header row from safeColumns is populated and brightly styled if row 0 was empty
     safeColumns.forEach((col, cIdx) => {

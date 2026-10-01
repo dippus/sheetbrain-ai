@@ -608,7 +608,10 @@ runTest('Sliding Window Rate Limiter Defense (DoS & Quota Protection)', () => {
 });
 
 runTest('Browser CSRF Origin Validator Compliance (Exact Domain Lockdown)', () => {
-  const EXACT_PRODUCTION_DOMAIN = 'main.d36a9s34xgy54i.amplifyapp.com';
+  const ALLOWED_PRODUCTION_DOMAINS = new Set([
+    'main.ddro9iqx1ajmw.amplifyapp.com',
+    'main.d36a9s34xgy54i.amplifyapp.com',
+  ]);
 
   function isAllowedOrigin(origin, referer) {
     if (!origin && !referer) return true; // Server-to-server / curl
@@ -618,7 +621,7 @@ runTest('Browser CSRF Origin Validator Compliance (Exact Domain Lockdown)', () =
       const host = parsed.hostname.toLowerCase();
       if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') return true;
       // Exact domain match ONLY (blocks rogue *.amplifyapp.com apps)
-      if (host === EXACT_PRODUCTION_DOMAIN) return true;
+      if (ALLOWED_PRODUCTION_DOMAINS.has(host)) return true;
       return false;
     } catch {
       return false;
@@ -627,6 +630,7 @@ runTest('Browser CSRF Origin Validator Compliance (Exact Domain Lockdown)', () =
 
   assert.strictEqual(isAllowedOrigin('http://localhost:3000', null), true);
   assert.strictEqual(isAllowedOrigin('http://127.0.0.1:3000', null), true);
+  assert.strictEqual(isAllowedOrigin('https://main.ddro9iqx1ajmw.amplifyapp.com', null), true);
   assert.strictEqual(isAllowedOrigin('https://main.d36a9s34xgy54i.amplifyapp.com', null), true);
   // Rogue Amplify apps must be BLOCKED (no wildcard vulnerability!)
   assert.strictEqual(isAllowedOrigin('https://attacker-app.amplifyapp.com', null), false, 'Wildcard Amplify app must be blocked');

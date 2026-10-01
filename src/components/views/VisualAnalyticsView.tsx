@@ -118,9 +118,10 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
 
   // 2. Interactive Selection State
   const [selectedXKey, setSelectedXKey] = useState<string>(defaultXKey);
-  const [activeTrendType, setActiveTrendType] = useState<'line' | 'bar' | 'area'>('area');
+  const [activeTrendType, setActiveTrendType] = useState<'line' | 'bar' | 'area'>('bar');
   const [selectedSeriesKeys, setSelectedSeriesKeys] = useState<string[]>([]);
   const [aggregationMode, setAggregationMode] = useState<'sum' | 'avg'>('sum');
+  const [sampleLimit, setSampleLimit] = useState<number>(25);
 
   useEffect(() => {
     setSelectedXKey(defaultXKey);
@@ -134,6 +135,12 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
   const activeSeriesCols = useMemo(() => {
     return numericCols.filter(c => selectedSeriesKeys.includes(c.key));
   }, [numericCols, selectedSeriesKeys]);
+
+  const isYearLikeColumn = useMemo(() => {
+    if (!primaryCol) return false;
+    const label = (primaryCol.label || primaryCol.key).toLowerCase();
+    return /year|yr|date|period/i.test(label);
+  }, [primaryCol]);
 
   const toggleSeries = (key: string) => {
     setSelectedSeriesKeys(prev => {
@@ -153,6 +160,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
 
     let overallTotal = 0;
     let overallPeak = -Infinity;
+    let overallMin = Infinity;
     let dataRowCount = 0;
 
     const isSummaryRow = (rowIdx: number, rowLabel: string) => {
@@ -183,6 +191,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
           if (col.key === primaryCol?.key) {
             overallTotal += v;
             if (v > overallPeak) overallPeak = v;
+            if (v < overallMin) overallMin = v;
             compMap[name] = (compMap[name] || 0) + v;
             rankMap[name] = (rankMap[name] || 0) + v;
           }
@@ -251,12 +260,37 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
         total: overallTotal,
         mean: meanVal,
         peak: overallPeak === -Infinity ? 0 : overallPeak,
+        min: overallMin === Infinity ? 0 : overallMin,
         dataPoints: dataRowCount,
         primaryType: primaryCol?.type,
+        isYearLike: isYearLikeColumn,
       },
       statsAudit: audit,
     };
-  }, [cellMap, totalRows, numericCols, xCol, primaryCol]);
+  }, [cellMap, totalRows, numericCols, xCol, primaryCol, isYearLikeColumn]);
+
+  // 3b. High-Cardinality Adaptive Downsampler (Prevents 9,668 SVG elements freezing DOM)
+  const displayTrendData = useMemo(() => {
+    if (trendData.length <= 35 || sampleLimit === 0) {
+      return trendData;
+    }
+
+    if (activeTrendType === 'bar') {
+      // For Column / Bar charts: Sort descending by primary metric to highlight top observations
+      const metricKey = primaryCol?.label || primaryCol?.key;
+      const sorted = [...trendData].sort((a, b) => {
+        const valA = typeof a[metricKey] === 'number' ? (a[metricKey] as number) : 0;
+        const valB = typeof b[metricKey] === 'number' ? (b[metricKey] as number) : 0;
+        return valB - valA;
+      });
+      return sorted.slice(0, sampleLimit);
+    }
+
+    // For Line and Area charts: Uniform stride sampling (~60-80 data points for 60fps rendering)
+    const targetPoints = Math.min(sampleLimit * 2, 80);
+    const stride = Math.ceil(trendData.length / targetPoints);
+    return trendData.filter((_, idx) => idx % stride === 0 || idx === trendData.length - 1);
+  }, [trendData, sampleLimit, activeTrendType, primaryCol]);
 
   // Clean empty state if sheet has no data
   if (trendData.length === 0) {
@@ -283,20 +317,28 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
     <div className="flex-1 p-6 md:p-8 overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col gap-6 select-none transition-colors">
       {/* 1. Executive KPI Summary Cards (L1 Surface with L2 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Aggregate Card */}
+        {/* Total Aggregate Card (or Temporal Span Card if year-like metric) */}
         <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md p-5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm dark:shadow-xl flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] font-semibold uppercase tracking-wider">
-              {primaryCol ? `Aggregate (${primaryCol.label})` : 'Gross Aggregate'}
+              {kpis.isYearLike
+                ? `Temporal Span (${primaryCol?.label || 'Year'})`
+                : primaryCol
+                ? `Aggregate (${primaryCol.label})`
+                : 'Gross Aggregate'}
             </span>
             <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="mt-2.5">
             <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-mono tabular-nums">
-              {formatSmartValue(kpis.total, kpis.primaryType)}
+              {kpis.isYearLike && kpis.min < Infinity && kpis.peak > -Infinity
+                ? `${Math.round(kpis.min)} – ${Math.round(kpis.peak)}`
+                : formatSmartValue(kpis.total, kpis.primaryType)}
             </div>
             <div className="mt-1 text-[11px] text-slate-500 font-mono">
-              Total volume across {kpis.dataPoints} records
+              {kpis.isYearLike
+                ? `Temporal range across ${kpis.dataPoints.toLocaleString()} records`
+                : `Total volume across ${kpis.dataPoints.toLocaleString()} records`}
             </div>
           </div>
         </div>
@@ -454,28 +496,71 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Card A: Multi-Horizon Trend Synthesis (2 Cols) */}
         <div className="lg:col-span-2 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 p-6 shadow-sm dark:shadow-xl flex flex-col gap-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800/80">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <BarChart2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>{chartConfig?.title || 'Multi-Horizon Trend Synthesis'}</span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Dynamic visual progression across {kpis.dataPoints} records
+                Dynamic visual progression across {kpis.dataPoints.toLocaleString()} records
               </p>
             </div>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-              Dimension: {xCol?.label || 'X'}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                Dimension: {xCol?.label || 'X'}
+              </span>
+              {trendData.length > 35 && (
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-mono">
+                  <span className="text-slate-500 px-1 font-semibold">VIEW:</span>
+                  <button
+                    onClick={() => setSampleLimit(25)}
+                    className={`px-2 py-0.5 rounded transition-all duration-150 ${
+                      sampleLimit === 25
+                        ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 font-semibold'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Top 25
+                  </button>
+                  <button
+                    onClick={() => setSampleLimit(50)}
+                    className={`px-2 py-0.5 rounded transition-all duration-150 ${
+                      sampleLimit === 50
+                        ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 font-semibold'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Top 50
+                  </button>
+                  <button
+                    onClick={() => setSampleLimit(0)}
+                    className={`px-2 py-0.5 rounded transition-all duration-150 ${
+                      sampleLimit === 0
+                        ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 font-semibold'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    All ({trendData.length})
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="w-full h-80">
             {hasMounted ? (
               <ResponsiveContainer width="100%" height="100%">
                 {activeTrendType === 'line' ? (
-                  <LineChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+                  <LineChart data={displayTrendData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.25} vertical={false} />
-                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
+                    <XAxis
+                      dataKey="name"
+                      stroke="#94a3b8"
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                    />
                     <YAxis
                       stroke="#94a3b8"
                       tick={{ fontSize: 11, fill: '#64748b' }}
@@ -513,15 +598,24 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                         dataKey={col.label || col.key}
                         stroke={PALETTE[idx % PALETTE.length]}
                         strokeWidth={2.5}
-                        dot={{ r: 3, fill: PALETTE[idx % PALETTE.length] }}
+                        dot={displayTrendData.length <= 40 ? { r: 3, fill: PALETTE[idx % PALETTE.length] } : false}
                         activeDot={{ r: 6 }}
                       />
                     ))}
                   </LineChart>
                 ) : activeTrendType === 'bar' ? (
-                  <BarChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+                  <BarChart data={displayTrendData} margin={{ top: 10, right: 30, left: 10, bottom: displayTrendData.length > 12 ? 35 : 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.25} vertical={false} />
-                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
+                    <XAxis
+                      dataKey="name"
+                      stroke="#94a3b8"
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tickLine={false}
+                      interval={displayTrendData.length > 40 ? 'preserveStartEnd' : 0}
+                      angle={displayTrendData.length > 12 ? -30 : 0}
+                      textAnchor={displayTrendData.length > 12 ? 'end' : 'middle'}
+                      height={displayTrendData.length > 12 ? 45 : 30}
+                    />
                     <YAxis
                       stroke="#94a3b8"
                       tick={{ fontSize: 11, fill: '#64748b' }}
@@ -558,13 +652,20 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
                         dataKey={col.label || col.key}
                         fill={PALETTE[idx % PALETTE.length]}
                         radius={[4, 4, 0, 0]}
+                        maxBarSize={45}
                       />
                     ))}
                   </BarChart>
                 ) : (
-                  <AreaChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+                  <AreaChart data={displayTrendData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.25} vertical={false} />
-                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
+                    <XAxis
+                      dataKey="name"
+                      stroke="#94a3b8"
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                    />
                     <YAxis
                       stroke="#94a3b8"
                       tick={{ fontSize: 11, fill: '#64748b' }}
@@ -670,7 +771,8 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               {/* Share Breakdown List */}
               <div className="space-y-2 overflow-y-auto max-h-40 pr-1 text-xs">
                 {compositionData.map((item, idx) => {
-                  const percent = kpis.total > 0 ? ((item.value / kpis.total) * 100).toFixed(1) : '0';
+                  const pctNum = kpis.total > 0 ? (item.value / kpis.total) * 100 : 0;
+                  const percent = pctNum < 0.1 && pctNum > 0 ? '< 0.1' : pctNum.toFixed(1);
                   return (
                     <div key={item.name} className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                       <div className="flex items-center gap-2 truncate">

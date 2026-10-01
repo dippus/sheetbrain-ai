@@ -12,7 +12,7 @@
 | **Hosting Platform** | AWS Amplify Hosting (SSR) | Managed Next.js 14 serverless hosting with global CloudFront edge distribution. |
 | **Region** | `ap-southeast-2` (Sydney) | Mandatory project region. All regional services (Amazon Bedrock Mantle, CloudWatch, S3) execute strictly within `ap-southeast-2` to eliminate cross-region latency and enforce policy compliance. |
 | **SSL / HTTPS** | AWS Amplify Managed SSL | Automatic TLS certificate provisioning on `*.amplifyapp.com` domain. |
-| **Domain** | Public Amplify Live URL | [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com) (Live production deployment, publicly accessible without login or VPN). |
+| **Domain** | Public Amplify Live URL | [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com) (Live production deployment, publicly accessible without login or VPN). |
 
 ---
 
