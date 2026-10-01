@@ -96,7 +96,6 @@ export default function SheetBrainStudio() {
   const [activeTemplateKey, setActiveTemplateKey] = useState<string>('blank_sheet');
   const [datasets, setDatasets] = useState<DatasetItem[]>([
     { key: 'blank_sheet', label: 'New Blank Spreadsheet', category: 'Workspace', periods: 'Blank', type: 'Blank' },
-    { key: 'Expense-Claims.xlsx', label: 'Expense-Claims.xlsx', category: 'Excel Dataset', periods: '1,001 Rows', type: 'Native XLSX' },
   ]);
   const [activeSheetId, setActiveSheetId] = useState<string>(initialWorkbook.sheets[0]?.id || 'sheet_1');
   const [customImportName, setCustomImportName] = useState<string | null>(null);

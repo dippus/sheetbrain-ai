@@ -4,19 +4,15 @@ import React, { useEffect, useRef } from 'react';
 import { SheetData, SheetCell } from '@/types/sheet';
 import { parseCoord, colToIndex } from '@/lib/engine/formulaEngine';
 import { indexToColLetter } from '@/lib/engine/csvHelper';
-import { createUniver, defaultTheme, darkBlueTheme, LocaleType, mergeLocales } from '@univerjs/presets';
+import { createUniver, defaultTheme, darkBlueTheme, LocaleType } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import UniverPresetSheetsCoreEnUS from '@univerjs/preset-sheets-core/locales/en-US';
-import { UniverSheetsDataValidationPreset } from '@univerjs/preset-sheets-data-validation';
-import UniverPresetSheetsDataValidationEnUS from '@univerjs/preset-sheets-data-validation/locales/en-US';
 import '@univerjs/design/lib/index.css';
 import '@univerjs/ui/lib/index.css';
 import '@univerjs/sheets-ui/lib/index.css';
 import '@univerjs/sheets-formula-ui/lib/index.css';
 import '@univerjs/sheets-numfmt-ui/lib/index.css';
-import '@univerjs/sheets-data-validation-ui/lib/index.css';
 import '@univerjs/preset-sheets-core/lib/index.css';
-import '@univerjs/preset-sheets-data-validation/lib/index.css';
 
 interface UniverSheetCoreProps {
   sheet: SheetData;
@@ -317,14 +313,11 @@ export default function UniverSheetCore({
     try {
       const isDark = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
-      // Initialize Open-Source Univer Sheets Core & Data Validation Presets with official mergeLocales pattern
+      // Initialize Open-Source Univer Sheets Core Preset with official clean locales
       const { univer, univerAPI } = createUniver({
         locale: LocaleType.EN_US,
         locales: {
-          [LocaleType.EN_US]: mergeLocales(
-            UniverPresetSheetsCoreEnUS,
-            UniverPresetSheetsDataValidationEnUS
-          ),
+          [LocaleType.EN_US]: UniverPresetSheetsCoreEnUS,
         },
         theme: isDark ? darkBlueTheme : defaultTheme,
         presets: [
@@ -335,10 +328,6 @@ export default function UniverSheetCore({
             formulaBar: true,  // Excel fx formula bar
             contextMenu: true, // Native right-click context menu
             footer: { sheetBar: false, statisticBar: true }, // SheetBrain provides native safe bottom tab bar
-          }),
-          UniverSheetsDataValidationPreset({
-            showEditOnDropdown: true,
-            showSearchOnDropdown: true,
           }),
         ],
       });
