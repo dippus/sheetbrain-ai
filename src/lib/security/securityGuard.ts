@@ -47,22 +47,38 @@ export interface RateLimitResult {
 /**
  * Extracts client IP safely across CloudFront, AWS Amplify, proxy, and direct connections.
  */
+/**
+ * Extracts client IP safely across CloudFront, AWS Amplify, proxy, and direct connections.
+ * In AWS Amplify/CloudFront, `cloudfront-viewer-address` cannot be forged by the client.
+ */
 export function extractClientIp(req: NextRequest): string {
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    // Left-most IP is the original client
-    const clientIp = forwardedFor.split(',')[0].trim();
-    if (clientIp) return clientIp;
+  // 1. CloudFront authentic viewer address (Format: IP:Port) - highest trust, tamper-proof
+  const cfViewer = req.headers.get('cloudfront-viewer-address');
+  if (cfViewer) {
+    const ip = cfViewer.split(':')[0].trim();
+    if (ip) return ip;
   }
 
+  // 2. Real-IP set by trusted reverse proxy
   const realIp = req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip');
   if (realIp) return realIp.trim();
+
+  // 3. X-Forwarded-For: CloudFront appends client IP to the end. Take rightmost non-internal IP
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const parts = forwardedFor.split(',').map((p) => p.trim()).filter(Boolean);
+    // Take the last client hop appended by edge proxy
+    const clientIp = parts[parts.length - 1];
+    if (clientIp) return clientIp;
+  }
 
   return '127.0.0.1';
 }
 
 /**
  * Checks sliding window rate limit for the incoming request.
+ * NOTE: This is a process-level (L1) rate limiter. In multi-instance serverless environments,
+ * counters are per-instance. It effectively protects against single-client burst loops.
  */
 export function checkRateLimit(
   req: NextRequest,
@@ -150,24 +166,28 @@ export interface PromptSecurityResult {
 }
 
 /**
- * Strict regex signatures for adversarial prompt injection, system prompt extraction,
- * and LLM jailbreak patterns.
+ * Scoped regex signatures targeting prompt injection, system prompt extraction,
+ * and jailbreak attempts without causing false positives on legitimate business spreadsheet requests
+ * (e.g. "ignore blank rows", "ERP system", "previous quarters", "tax system rules").
  */
 const INJECTION_PATTERNS: Array<{ regex: RegExp; description: string }> = [
   {
-    regex: /\b(ignore|disregard|forget|override|bypass)\b[\s\S]{0,40}\b(previous|all|prior|above|system)\b[\s\S]{0,40}\b(instructions|directions|prompts|rules|commands)\b/i,
+    // Scoped strictly to overriding system/developer instructions (not business data rules)
+    regex: /\b(ignore|disregard|forget|override)\b[\s\S]{0,15}\b(all\s+)?(previous|prior|above)\b[\s\S]{0,15}\b(instructions?|prompts?|directions?|system\s+rules?)\b/i,
     description: 'System instruction override / disregard command',
   },
   {
-    regex: /\b(what (is|are)|print|show|reveal|display|output|leak|give me|repeat)\b[\s\S]{0,30}\b(your|the)\b[\s\S]{0,30}\b(system prompt|internal prompt|developer instructions|hidden prompt)\b/i,
+    // Specific system prompt leakage requests
+    regex: /\b(what (is|are)|print|show|reveal|display|output|leak|give me|repeat)\b[\s\S]{0,20}\b(your|the)\b[\s\S]{0,20}\b(system prompt|internal prompt|developer instructions|hidden prompt)\b/i,
     description: 'System prompt extraction attempt',
   },
   {
-    regex: /\b(you are now|pretend you are|act as|roleplay as)\b[\s\S]{0,40}\b(dan|jailbreak|unfiltered|unrestricted|god mode|developer mode|chaos)\b/i,
+    // Explicit jailbreak persona override
+    regex: /\b(you are now|pretend you are|act as|roleplay as)\b[\s\S]{0,20}\b(dan|jailbreak|unfiltered ai|unrestricted mode)\b/i,
     description: 'Jailbreak persona or DAN override',
   },
   {
-    regex: /\b(do anything now|bypass safety filters|disable guardrails|ignore safety guidelines)\b/i,
+    regex: /\b(do anything now|bypass safety filters|disable guardrails)\b/i,
     description: 'Guardrail bypass attempt',
   },
   {
@@ -208,17 +228,21 @@ export function detectPromptInjection(input: string): PromptSecurityResult {
 }
 
 // ==============================================================================
-// 3. ORIGIN & CSRF VALIDATOR
+// 3. BROWSER CSRF ORIGIN VALIDATOR
 // ==============================================================================
 
+/** Exact production domain (NO wildcard *.amplifyapp.com allowed) */
+const EXACT_PRODUCTION_DOMAIN = 'main.d36a9s34xgy54i.amplifyapp.com';
+
 /**
- * Validates Origin / Referer for state-changing API endpoints to guard against cross-site exploitation.
+ * Validates Origin / Referer for browser-initiated state-changing API endpoints.
+ * NOTE: This is browser CSRF defense, NOT bot/abuse protection (curl/scripts can forge headers).
  */
 export function isAllowedOrigin(req: NextRequest): boolean {
   const origin = req.headers.get('origin');
   const referer = req.headers.get('referer');
 
-  // Server-to-server, direct curl, or automated testing often has no origin header
+  // Server-to-server, direct curl, or automated testing has no browser Origin header
   if (!origin && !referer) {
     return true;
   }
@@ -234,8 +258,8 @@ export function isAllowedOrigin(req: NextRequest): boolean {
       return true;
     }
 
-    // Allow AWS Amplify domains
-    if (host.endsWith('.amplifyapp.com')) {
+    // Allow ONLY our exact production domain (no broad wildcard that permits rogue Amplify apps)
+    if (host === EXACT_PRODUCTION_DOMAIN) {
       return true;
     }
 

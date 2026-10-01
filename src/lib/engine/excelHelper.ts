@@ -103,6 +103,7 @@ export function parseXLSXToWorkbook(fileName: string, data: ArrayBuffer | Uint8A
       for (let c = 0; c < colCount; c++) {
         const colKey = indexToColLetter(c);
         const coord = `${colKey}${rowNum}`;
+        if (coord === '__proto__' || coord === 'constructor' || coord === 'prototype') continue;
         const rawCell = ws[coord];
         const val = row[c];
 
