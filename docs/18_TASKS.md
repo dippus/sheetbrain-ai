@@ -42,10 +42,11 @@
 ---
 
 ## Phase 5: Submission Artifacts, Evidence & Verification (Day 4 — IN PROGRESS 🚀)
-- [x] Capture visual evidence and populate register (`19_EVIDENCE.md`)
-- [x] Execute complete end-to-end automated test suite (12/12 passing in `scripts/test-suite.mjs`)
-- [x] Verify all gates in `21_SUBMISSION_CHECKLIST.md` (Gate 1 & Gate 2 Cleared ✅)
-- [ ] Record 2-minute demo video following `20_DEMO_SCRIPT.md`
+- [x] Capture visual evidence and populate register ([`19_EVIDENCE.md`](./19_EVIDENCE.md))
+- [x] Execute complete end-to-end automated test suite (27/27 passing in [`scripts/test-suite.mjs`](../scripts/test-suite.mjs))
+- [x] Verify all gates in [`21_SUBMISSION_CHECKLIST.md`](./21_SUBMISSION_CHECKLIST.md) (Gate 1 & Gate 2 Cleared ✅)
+- [x] Generate 2-minute demo video voiceover following [`20_DEMO_SCRIPT.md`](./20_DEMO_SCRIPT.md) (Roger, 122s, 100% synchronized)
+- [ ] Finalize screen recording video sync and upload to YouTube/Loom
 - [ ] Publish project submission story on builder.aws.com and submit before deadline
 
 ---

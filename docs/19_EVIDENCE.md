@@ -21,7 +21,7 @@ Where proof is stored?
 | **2. Live AWS Deployment (Ship Gate)** | Public, reachable HTTPS URL on AWS Amplify: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com) | AWS Amplify Hosting Console + Live Production Deployment URL: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com) | Verified & Live (Ship Gate Cleared ✅) |
 | **3. AWS Services Used** | Server-side integration of Amazon Bedrock (`deepseek.v3.2` on Bedrock Mantle / `ap-southeast-2`), CloudWatch SDK & EMF, S3 resilient snapshot storage, and Amplify. | `docs/09_AWS_ARCHITECTURE.md`, `src/lib/aws/`, serverless route handlers. | Verified ✅ |
 | **4. Development Process** | Chronological builder story recounting architecture decisions and AI-assisted iterations. | `docs/22_AI_DEVELOPMENT_LOG.md` and Builder Center project story. | Verified ✅ |
-| **5. Original & Unpublished App** | Fresh GitHub repository with clean commit history starting from hackathon kickoff. | Public GitHub repository commit tree (`main` branch). | Verified ✅ |
+| **5. Original & Unpublished App** | Fresh GitHub repository with clean commit history starting from hackathon kickoff. | Public GitHub repository commit tree: [https://github.com/sajankuma7000-art/sheetbrain-ai](https://github.com/sajankuma7000-art/sheetbrain-ai) (`main` branch). | Verified ✅ |
 | **6. Open Source Compliance** | OSI-approved open source license at project root. | `LICENSE` (MIT License) at root. | Verified ✅ |
 
 ---
@@ -29,11 +29,14 @@ Where proof is stored?
 ## 2. Live Deployment Proof & Verification (Ship Gate Pass)
 
 * **Live Production URL**: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com)
+* **GitHub Repository URL**: [https://github.com/sajankuma7000-art/sheetbrain-ai](https://github.com/sajankuma7000-art/sheetbrain-ai)
 * **AWS Amplify App ID**: `d36a9s34xgy54i` (Branch: `main`)
 * **Project Region**: `ap-southeast-2` (Sydney)
 * **Model in Production**: `deepseek.v3.2` on Amazon Bedrock Mantle runtime
 * **Guest Flow Check**: 100% verified — zero login walls, instantaneous guest canvas access
 * **Spreadsheet Reactivity**: Verified — live `=SUM` formula recomputations and Dynamic Chart bindings run fully in-browser without crashes
+* **Security Audit & Compliance**: Documented at [`docs/15_SECURITY.md`](./15_SECURITY.md) (7/10 audit baseline with L1 sliding window rate limiting and exact origin lockdown)
+* **Demo Script & Storyboard**: [`docs/20_DEMO_SCRIPT.md`](./20_DEMO_SCRIPT.md)
 
 ---
 

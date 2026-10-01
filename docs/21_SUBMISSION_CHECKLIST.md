@@ -16,16 +16,16 @@
 ---
 
 ## 2. Technical & Ship Gates
-- [ ] **AI Coding Agent Connected**: Documented proof of AI assistant usage established.
-- [ ] **App Live on AWS (Ship Gate)**: Application is deployed on AWS Amplify with an active public HTTPS URL.
-- [ ] **Public Access Verified**: URL loads in an incognito window with zero login or password barrier.
-- [ ] **AWS Services Documented**: Explicit documentation of Amazon Bedrock, Amplify, and supporting services included.
-- [ ] **Open Source Code**: GitHub repository is public and contains an official **MIT License**.
+- [x] **AI Coding Agent Connected**: Documented proof of AI assistant usage established in [`docs/18_TASKS.md`](./18_TASKS.md) and [`docs/22_AI_DEVELOPMENT_LOG.md`](./22_AI_DEVELOPMENT_LOG.md).
+- [x] **App Live on AWS (Ship Gate)**: Application deployed on AWS Amplify with active public HTTPS URL: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com).
+- [x] **Public Access Verified**: URL loads in an incognito window with zero login or password barrier (Guest access active).
+- [x] **AWS Services Documented**: Explicit documentation of Amazon Bedrock Mantle (`deepseek.v3.2` / `ap-southeast-2`), CloudWatch EMF, S3 resilient storage, and Amplify in [`docs/09_AWS_ARCHITECTURE.md`](./09_AWS_ARCHITECTURE.md).
+- [x] **Open Source Code**: GitHub repository is public: [https://github.com/sajankuma7000-art/sheetbrain-ai](https://github.com/sajankuma7000-art/sheetbrain-ai) and contains official [`LICENSE`](../LICENSE) (MIT).
 
 ---
 
 ## 3. Submission Deliverables
 - [ ] **Builder Center Project Published**: Full project narrative published on builder.aws.com.
-- [ ] **2-Minute Demo Video**: Video recorded, uploaded (YouTube/Loom), and linked (follows `docs/17_DEMO_SCRIPT.md`).
-- [ ] **Architecture Diagram**: Clear system architecture diagram embedded in the submission story.
+- [ ] **2-Minute Demo Video**: Video recorded, uploaded (YouTube/Loom), and linked (follows [`docs/20_DEMO_SCRIPT.md`](./20_DEMO_SCRIPT.md)).
+- [x] **Architecture Diagram**: Clear system architecture diagram embedded in [`docs/06_ARCHITECTURE.md`](./06_ARCHITECTURE.md) and [`docs/09_AWS_ARCHITECTURE.md`](./09_AWS_ARCHITECTURE.md).
 - [ ] **Submission Submitted Before Deadline**: Final submission button pressed before October 2, 2026 deadline.
