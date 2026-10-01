@@ -264,3 +264,28 @@ html, body {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+/* Zero-CLS Layout Containment & Stable Viewport Geometry */
+.studio-sidebar-wrapper {
+  width: 16rem !important;
+  min-width: 16rem !important;
+  max-width: 16rem !important;
+  flex-shrink: 0 !important;
+  contain: layout style;
+}
+
+.studio-sidebar-collapsed {
+  width: 3.5rem !important;
+  min-width: 3.5rem !important;
+  max-width: 3.5rem !important;
+  flex-shrink: 0 !important;
+  contain: layout style;
+}
+
+.studio-main-viewport {
+  flex: 1 1 0%;
+  min-width: 0;
+  contain: layout;
+  position: relative;
+}
+

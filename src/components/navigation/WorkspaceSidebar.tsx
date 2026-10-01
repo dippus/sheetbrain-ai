@@ -111,7 +111,7 @@ export default function WorkspaceSidebar({
 
   if (isCollapsed) {
     return (
-      <aside aria-label="Workspace sidebar" className="flex h-full min-h-0 w-14 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)]">
+      <aside aria-label="Workspace sidebar" className="studio-sidebar-collapsed flex h-full min-h-0 w-14 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)]">
         <header className="flex shrink-0 flex-col items-center gap-2 border-b border-[var(--border-color)] px-1 py-3">
           <div aria-label="SheetBrain AI" role="img" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
             <TableProperties aria-hidden="true" className="h-5 w-5" />
@@ -201,7 +201,7 @@ export default function WorkspaceSidebar({
   }
 
   return (
-    <aside aria-label="Workspace sidebar" className="flex h-full min-h-0 w-64 md:w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-2xl">
+    <aside aria-label="Workspace sidebar" className="studio-sidebar-wrapper flex h-full min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-2xl">
       <header className="shrink-0 border-b border-[var(--border-color)]">
         <div className="flex min-w-0 items-center gap-2 px-3 py-3.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">

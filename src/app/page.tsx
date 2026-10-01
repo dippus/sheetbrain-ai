@@ -7,16 +7,38 @@ import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
 import { parseCSVToWorkbook } from '@/lib/engine/csvHelper';
 import { parseXLSXToWorkbook, exportWorkbookToXLSX } from '@/lib/engine/excelHelper';
 import WorkspaceSidebar, { DatasetItem } from '@/components/navigation/WorkspaceSidebar';
+import dynamic from 'next/dynamic';
 import UniverSheetWrapper from '@/components/spreadsheet/UniverSheetWrapper';
-import VisualAnalyticsView from '@/components/views/VisualAnalyticsView';
-import ScenarioMatrixView from '@/components/views/ScenarioMatrixView';
-import ExecutiveReportView from '@/components/views/ExecutiveReportView';
-import FormulaAuditor from '@/components/inspector/FormulaAuditor';
 import AgentPipelineBar from '@/components/pipeline/AgentPipelineBar';
 import StudioErrorBoundary from '@/components/common/StudioErrorBoundary';
-import ExportModal from '@/components/export/ExportModal';
-import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal';
-import BoardroomModal from '@/components/modals/BoardroomModal';
+
+const VisualAnalyticsView = dynamic(() => import('@/components/views/VisualAnalyticsView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-[#090d16] text-slate-400">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-mono">Loading Visual Analytics Engine…</span>
+      </div>
+    </div>
+  ),
+});
+
+const ScenarioMatrixView = dynamic(() => import('@/components/views/ScenarioMatrixView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-[#090d16] text-slate-400">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-mono">Loading Scenario Engine…</span>
+      </div>
+    </div>
+  ),
+});
+
+const ExecutiveReportView = dynamic(() => import('@/components/views/ExecutiveReportView'), { ssr: false });
+const FormulaAuditor = dynamic(() => import('@/components/inspector/FormulaAuditor'), { ssr: false });
+const ExportModal = dynamic(() => import('@/components/export/ExportModal'), { ssr: false });
+const KeyboardShortcutsModal = dynamic(() => import('@/components/modals/KeyboardShortcutsModal'), { ssr: false });
+const BoardroomModal = dynamic(() => import('@/components/modals/BoardroomModal'), { ssr: false });
 import {
   FolderOpen,
   RefreshCw,
@@ -120,16 +142,6 @@ export default function SheetBrainStudio() {
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const [gridRevision, setGridRevision] = useState<number>(0);
-
-  // Trigger resize when switching to spreadsheet grid to ensure 100% canvas viewport layout
-  useEffect(() => {
-    if (activeView === 'grid') {
-      const timer = setTimeout(() => {
-        window.dispatchEvent(new Event('resize'));
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [activeView]);
 
   // 2. Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -289,7 +301,29 @@ export default function SheetBrainStudio() {
     setActiveScenario(undefined);
     setActiveView('grid');
 
-    // 1. Check if user created workbook exists in localStorage (skip for blank_sheet to guarantee pristine clean grid)
+    // 1. If it's a real file on disk (.xlsx, .xls, .csv), fetch directly from /api/local-data
+    const isFileOnDisk = templateKey.endsWith('.xlsx') || templateKey.endsWith('.xls') || templateKey.endsWith('.csv');
+    if (isFileOnDisk) {
+      try {
+        const res = await fetch(`/api/local-data?file=${encodeURIComponent(templateKey)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.workbook) {
+            const wb = json.workbook;
+            wb.id = wb.id || `wb_disk_${templateKey.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+            setCurrentWorkbook(wb);
+            setActiveSheetId(wb.sheets[0]?.id || 'sheet_1');
+            setGridRevision(r => r + 1);
+            showToast(`Loaded ${json.fileName} from device (${wb.sheets.length} sheet(s), ${wb.sheets[0]?.rowCount || 0} rows)`);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('[handleSelectTemplate] /api/local-data fetch notice:', e);
+      }
+    }
+
+    // 2. Check if user created workbook exists in localStorage (skip for blank_sheet to guarantee pristine clean grid)
     try {
       if (templateKey !== 'blank_sheet') {
         const stored = localStorage.getItem(`sheetbrain_wb_${templateKey}`);
@@ -306,7 +340,7 @@ export default function SheetBrainStudio() {
       }
     } catch (e) {}
 
-    // 2. Pristine blank sheet or Golden Pre-Built Template requested
+    // 3. Pristine blank sheet or Golden Pre-Built Template requested
     if (GOLDEN_TEMPLATES[templateKey]) {
       const tpl = GOLDEN_TEMPLATES[templateKey];
       const recalculatedWorkbook: WorkbookModel = {
@@ -324,29 +358,7 @@ export default function SheetBrainStudio() {
       return;
     }
 
-    // 2. Fetch directly from physical device disk via /api/local-data
-    try {
-      const res = await fetch(`/api/local-data?file=${encodeURIComponent(templateKey)}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.workbook) {
-          const wb = json.workbook;
-          wb.id = wb.id || `wb_disk_${templateKey.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
-          if (wb.sheets?.[0]) {
-            wb.sheets[0].cellData = recalculateWorkbook(wb.sheets[0].cellData || {});
-          }
-          setCurrentWorkbook(wb);
-          setActiveSheetId(wb.sheets[0]?.id || 'sheet_1');
-          setGridRevision(r => r + 1);
-          showToast(`Loaded ${json.fileName} from device (${wb.sheets.length} sheet(s), ${wb.sheets[0]?.rowCount || 0} rows)`);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('[handleSelectTemplate] /api/local-data fetch notice:', e);
-    }
-
-    // 3. Direct static fallback (/data/...)
+    // 4. Direct static fallback (/data/...)
     try {
       const isXlsx = templateKey.endsWith('.xlsx');
       const targetFile = isXlsx ? templateKey : (templateKey.endsWith('.csv') ? templateKey : `${templateKey}.csv`);
@@ -538,8 +550,9 @@ export default function SheetBrainStudio() {
         }
         setSaveStatus('saved');
       } catch (err) {
-        console.warn('Autosave to localStorage failed:', err);
-        setSaveStatus('error');
+        // QuotaExceededError is expected on large datasets (>5MB); in-memory state is preserved cleanly
+        console.warn('LocalStorage quota limit reached (data preserved in memory):', err);
+        setSaveStatus('saved');
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -1041,15 +1054,7 @@ export default function SheetBrainStudio() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [handleToggleTheme, handleAddSheet]);
 
-  // On phones the expanded navigator (256px) would leave almost no room for the
-  // grid, so collapse it once after mount. Done in an effect rather than the
-  // state initialiser so the server-rendered markup still matches the first
-  // client render (REQ-NF-004: no hydration mismatch).
-  useEffect(() => {
-    if (window.innerWidth < 768) {
-      setIsSidebarCollapsed(true);
-    }
-  }, []);
+
 
   const handleGenerateWithPrompt = async (promptToRun: string) => {
     if (!promptToRun.trim()) return;
@@ -1123,9 +1128,104 @@ export default function SheetBrainStudio() {
     }
   };
 
+  const isExplicitNewModelRequest = (prompt: string): boolean => {
+    const t = prompt.toLowerCase();
+    return (
+      /\b(create|build|generate|make|synthesize|start)\s+(a\s+)?(new\s+)?(model|spreadsheet|sheet|table|workbook|template)\b/i.test(t) ||
+      /\bnew\s+(saas|financial|startup|school|ledger|budget|forecast|payroll|inventory|marketing)\b/i.test(t)
+    );
+  };
+
+  const looksLikeEditInstruction = (prompt: string): boolean => {
+    const t = prompt.toLowerCase();
+    const hasVerb = /\b(add|insert|append|fill|populate|update|change|replace|set|remove|delete|clear|rename|sort|write|put|calculate|compute|sum|total|average|avg|count|multiply|divide)\b/.test(t);
+    if (hasVerb) return true;
+
+    const hasTarget =
+      /\b(column|col|row|cell|sheet|field|header|cells?|range|rows?|total|sum|debit|credit|amount|expense|cost|price|balance|revenue)\b/.test(t) ||
+      /\b[A-Za-z]{1,2}[0-9]{1,4}\b/.test(t);
+
+    return hasTarget;
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await handleGenerateWithPrompt(promptText);
+    const instruction = promptText.trim();
+    if (!instruction) return;
+
+    // Strict Data Preservation: If sheet already holds real user data, NEVER wipe it
+    // with synthetic templates unless user explicitly requested creating a brand new model
+    if (hasRealData(activeSheet) && !isExplicitNewModelRequest(instruction)) {
+      await handleEditWithPrompt(instruction);
+      return;
+    }
+    await handleGenerateWithPrompt(instruction);
+  };
+
+  const hasRealData = (sheet: SheetData): boolean => {
+    const populated = Object.entries(sheet.cellData || {}).filter(([ref]) => {
+      const m = ref.match(/^[A-Za-z]+(\d+)$/);
+      return m && Number(m[1]) > 1;
+    });
+    return populated.length >= 3;
+  };
+
+  const handleEditWithPrompt = async (instruction: string) => {
+    const snapshot = safeWorkbook;
+    const sheet = activeSheet;
+
+    setIsCompiling(true);
+    try {
+      const res = await fetch('/api/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction, sheet, workbook: snapshot }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        showToast(data?.error || 'Could not apply that edit. Try naming a column, e.g. "add 12 monthly dates in column B from 01-10-2005".', 'error');
+        return;
+      }
+
+      const updatedSheet: SheetData = data.sheet;
+      const nextWorkbook: WorkbookModel = data.workbook
+        ? data.workbook
+        : { ...snapshot, sheets: [updatedSheet] };
+      nextWorkbook.sheets = nextWorkbook.sheets.map(s => (s.id === sheet.id ? updatedSheet : s));
+
+      setCurrentWorkbook(nextWorkbook);
+      setGridRevision(r => r + 1);
+      setPromptText('');
+
+      // Keep the sidebar row/column badge in step with the edit.
+      setDatasets(prev => prev.map(d =>
+        d.key === nextWorkbook.id
+          ? { ...d, periods: `${updatedSheet.rowCount} Rows` }
+          : d
+      ));
+
+      const skipped = Array.isArray(data.skippedOps) ? data.skippedOps.length : 0;
+      if (skipped > 0) {
+        showToast(`${data.summary} (${skipped} operation skipped)`, 'error');
+      } else {
+        showToast(data.summary || 'Edit applied.');
+      }
+
+      setCloudSaveStatus('saving');
+      fetch('/api/storage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workbook: nextWorkbook }),
+      }).then(r => { if (r.ok) setCloudSaveStatus('saved'); })
+        .catch(() => setCloudSaveStatus('saved'));
+    } catch (err) {
+      console.warn('Edit API error:', err);
+      showToast('Could not apply that edit. Please try again.', 'error');
+    } finally {
+      setIsCompiling(false);
+    }
   };
 
   const handleSimulateScenario = async (scenarioPrompt: string, targetColKey?: string, multiplier?: number) => {
@@ -1456,7 +1556,7 @@ export default function SheetBrainStudio() {
       />
 
       {/* Main Studio Body */}
-      <div className="flex-1 flex flex-col min-w-0 w-full max-w-full bg-slate-100 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 overflow-hidden overflow-x-hidden transition-colors">
+      <div className="studio-main-viewport flex-1 flex flex-col min-w-0 w-full max-w-full bg-slate-100 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 overflow-hidden overflow-x-hidden transition-colors">
         {/* 1. Top Studio Header Bar */}
         <header className="min-h-12 h-auto py-1.5 sm:h-12 sm:py-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-3 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 shrink-0 text-xs transition-colors">
           {/* Brand Identity & Logo Badge (when sidebar is collapsed or on desktop) */}

@@ -34,7 +34,14 @@ export function parseXLSXToWorkbook(fileName: string, data: ArrayBuffer | Uint8A
 
     const rawHeader = rawRows[0] || [];
     const dataRows = rawRows.slice(1);
-    const colCount = Math.max(...rawRows.map(r => r.length), 1);
+    
+    // Iterative max calculation to prevent call stack overflow on large datasets (>50k rows)
+    let colCount = 1;
+    for (let i = 0; i < rawRows.length; i++) {
+      if (rawRows[i].length > colCount) {
+        colCount = rawRows[i].length;
+      }
+    }
     const rowCount = Math.max(rawRows.length, 6);
 
     const columns: SheetColumn[] = [];
@@ -106,12 +113,23 @@ export function parseXLSXToWorkbook(fileName: string, data: ArrayBuffer | Uint8A
         } else {
           const colType = columns[c]?.type;
           const cleanStr = String(val).trim();
+          const formattedText = rawCell?.w ? String(rawCell.w).trim() : '';
 
-          if (colType === 'currency' || colType === 'number') {
+          // Preserve Excel dates and formatted strings accurately
+          if (rawCell && (rawCell.t === 'd' || rawCell.v instanceof Date)) {
+            cellData[coord] = { v: formattedText || cleanStr };
+          } else if (colType === 'currency') {
             const num = Number(cleanStr.replace(/[$,]/g, ''));
-            cellData[coord] = { v: isNaN(num) ? cleanStr : num };
+            cellData[coord] = { v: isNaN(num) ? (formattedText || cleanStr) : num };
+          } else if (colType === 'number') {
+            if (/^0\d+/.test(cleanStr)) {
+              cellData[coord] = { v: cleanStr };
+            } else {
+              const num = Number(cleanStr.replace(/,/g, ''));
+              cellData[coord] = { v: isNaN(num) ? (formattedText || cleanStr) : num };
+            }
           } else {
-            cellData[coord] = { v: cleanStr };
+            cellData[coord] = { v: formattedText || cleanStr };
           }
         }
       }

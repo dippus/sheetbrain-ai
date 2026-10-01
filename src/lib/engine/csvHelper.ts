@@ -1,4 +1,4 @@
-﻿import { SheetColumn, SheetCell, SheetData, ChartConfig, WorkbookModel, CellFormatType } from '@/types/sheet';
+import { SheetColumn, SheetCell, SheetData, ChartConfig, WorkbookModel, CellFormatType } from '@/types/sheet';
 
 // Helper to convert index (0, 1, 2...) to column letter ('A', 'B'...'Z', 'AA'...)
 export function indexToColLetter(index: number): string {
@@ -11,31 +11,51 @@ export function indexToColLetter(index: number): string {
   return letter;
 }
 
-// CSV Line Splitter handling quotes
+// RFC 4180 Compliant High-Performance CSV Streaming Parser
 export function parseCSVLines(csvText: string): string[][] {
   const rows: string[][] = [];
-  const lines = csvText.split(/\r?\n/);
+  if (!csvText || !csvText.trim()) return rows;
 
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const row: string[] = [];
-    let insideQuotes = false;
-    let currentCell = '';
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let inQuotes = false;
+  const len = csvText.length;
 
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"' || char === "'") {
-        insideQuotes = !insideQuotes;
-      } else if (char === ',' && !insideQuotes) {
-        row.push(currentCell.trim());
-        currentCell = '';
+  for (let i = 0; i < len; i++) {
+    const char = csvText[i];
+
+    if (char === '"') {
+      if (inQuotes && i + 1 < len && csvText[i + 1] === '"') {
+        // Escaped quote: "" -> "
+        currentCell += '"';
+        i++;
       } else {
-        currentCell += char;
+        inQuotes = !inQuotes;
       }
+    } else if (char === ',' && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && i + 1 < len && csvText[i + 1] === '\n') {
+        i++; // skip \n in CRLF
+      }
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+      if (currentRow.some(c => c.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+    } else {
+      currentCell += char;
     }
-    row.push(currentCell.trim());
-    rows.push(row);
   }
+
+  // Push final cell and row
+  currentRow.push(currentCell.trim());
+  if (currentRow.some(c => c.length > 0)) {
+    rows.push(currentRow);
+  }
+
   return rows;
 }
 
@@ -49,7 +69,14 @@ export function parseCSVToWorkbook(fileName: string, csvText: string): WorkbookM
 
   const rawHeader = rawRows[0];
   const dataRows = rawRows.slice(1);
-  const colCount = Math.max(...rawRows.map(r => r.length));
+
+  // Safe iterative calculation to prevent RangeError: Maximum call stack size exceeded on large datasets (>50k rows)
+  let colCount = 1;
+  for (let i = 0; i < rawRows.length; i++) {
+    if (rawRows[i].length > colCount) {
+      colCount = rawRows[i].length;
+    }
+  }
   const rowCount = Math.max(rawRows.length, 6);
 
   const columns: SheetColumn[] = [];
@@ -124,8 +151,13 @@ export function parseCSVToWorkbook(fileName: string, csvText: string): WorkbookM
         const clean = Number(raw.replace(/%/g, ''));
         cellData[coord] = { v: isNaN(clean) ? raw : clean > 1 ? clean / 100 : clean };
       } else if (colType === 'number') {
-        const clean = Number(raw.replace(/,/g, ''));
-        cellData[coord] = { v: isNaN(clean) ? raw : clean };
+        // Keep strings with leading zeroes (e.g. '0123' or '0054') as strings
+        if (/^0\d+/.test(raw)) {
+          cellData[coord] = { v: raw };
+        } else {
+          const clean = Number(raw.replace(/,/g, ''));
+          cellData[coord] = { v: isNaN(clean) ? raw : clean };
+        }
       } else {
         cellData[coord] = { v: raw };
       }

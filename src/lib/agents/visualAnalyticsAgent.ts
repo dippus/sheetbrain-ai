@@ -49,9 +49,10 @@ Return strict JSON:
       systemPrompt,
       userPrompt: `Dataset: "${title}". Columns: ${JSON.stringify(columns.map(c => ({ key: c.key, label: c.label, type: c.type })))}. Rows count: ${rawRows.length}. Sample compiled cells: ${JSON.stringify(Object.keys(compiledData.cellData).slice(0, 10))}`,
       maxTokens: 1000,
-      // Chart selection is a rule-based decision; the local synthesiser produces
-      // an equivalent config, so a slow model adds latency without adding value.
-      timeoutMs: 12000,
+      // Measured end-to-end responses for this stage run 5-6.5s, so a 6s
+      // ceiling rejected nearly every valid reply. 10s keeps the stage useful
+      // while still capping its worst-case contribution to the pipeline.
+      timeoutMs: 10000,
     });
 
     if (bedrockResult.data && bedrockResult.data.primarySeriesKey) {

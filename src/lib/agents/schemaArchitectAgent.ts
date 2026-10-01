@@ -168,7 +168,9 @@ HARD SIZE BUDGET (exceeding it truncates the response and forces a fallback):
       maxTokens: 800,
       // Semantic domain modelling is the one stage that genuinely requires a
       // foundation model, so it gets the largest share of the latency budget.
-      timeoutMs: 45000,
+      // The endpoint's response time varies from ~4s to well over 40s, so this
+      // ceiling keeps a slow queue from stalling the whole pipeline.
+      timeoutMs: 30000,
     });
 
     if (bedrockResult.data) {
@@ -192,6 +194,19 @@ HARD SIZE BUDGET (exceeding it truncates the response and forces a fallback):
     isFallback: true,
     latencyMs: Date.now() - startTime,
   };
+}
+
+/**
+ * Word-boundary keyword test for template routing.
+ *
+ * Plain `includes` caused real misroutes: "inventory stock reorder dashboard"
+ * contains the substring "order", so the e-commerce branch matched first and
+ * the inventory branch never ran. Matching whole words only keeps "reorder"
+ * from being read as "order" while still matching "order management".
+ */
+function hasKeyword(haystack: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, 'i').test(haystack);
 }
 
 export function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOutput {
@@ -327,7 +342,7 @@ export function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOu
   }
 
   // 5. E-Commerce & Retail Orders / Sales
-  if (p.includes('order') || p.includes('sales') || p.includes('store') || p.includes('ecommerce') || p.includes('product') || p.includes('customer') || p.includes('cart')) {
+  if (hasKeyword(p, 'order') || hasKeyword(p, 'orders') || hasKeyword(p, 'sales') || hasKeyword(p, 'store') || hasKeyword(p, 'ecommerce') || hasKeyword(p, 'product') || hasKeyword(p, 'customer') || hasKeyword(p, 'cart')) {
     return {
       title: 'E-Commerce Customer Order & Fulfillment Register',
       category: 'Sales',

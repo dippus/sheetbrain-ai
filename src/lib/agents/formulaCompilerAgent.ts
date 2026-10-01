@@ -1,11 +1,121 @@
 import { invokeBedrockAgent } from '@/lib/aws/bedrock';
-import { isCircularReference } from '@/lib/engine/formulaEngine';
+import { isCircularReference, recalculateWorkbook } from '@/lib/engine/formulaEngine';
 import { SheetCell, SheetColumn } from '@/types/sheet';
 import { SchemaArchitectOutput, FormulaCompilerOutput } from './types';
 
 interface BedrockFormulaPayload {
   formulaMap: Record<string, string>; // e.g. { "E2": "=D2-C2", "B10": "=SUM(B2:B9)" }
   summaryRowLabel?: string;
+}
+
+/**
+ * Column labels that denote a running balance, a stock level, or another
+ * quantity whose value is a snapshot rather than an independent contribution.
+ * Summing these double counts every period.
+ *
+ * "Cash Flow" is deliberately excluded: a flow is an independent per-period
+ * amount and legitimately sums, whereas a "Cash Balance" is a snapshot.
+ */
+const NON_ADDITIVE_LABEL =
+  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+\w+/i;
+
+/**
+ * Decides how a column may be aggregated in the summary row.
+ *
+ * A column is a running cascade when most of its data cells are formulas that
+ * read the row above (a "carry the balance forward" chain). Summing such a
+ * column is arithmetically meaningless - it adds eight snapshots of the same
+ * account, which is what previously reported a $8.79M "total" for a $1.2M
+ * opening balance. The closing value is reported instead.
+ */
+type SummaryStrategy = 'sum' | 'average' | 'closing';
+
+function detectSummaryStrategy(
+  column: SheetColumn,
+  cellData: Record<string, SheetCell>,
+  lastDataRow: number
+): SummaryStrategy {
+  if (column.type === 'percentage') return 'average';
+
+  // Snapshot semantics come first: a balance must never be added up.
+  if (NON_ADDITIVE_LABEL.test(column.label || '')) return 'closing';
+
+  let cascade = 0;
+  let numeric = 0;
+  for (let r = 2; r <= lastDataRow; r++) {
+    const cell = cellData[`${column.key}${r}`];
+    if (!cell) continue;
+    if (cell.f) {
+      // Reference to this column one row up == carry-forward chain.
+      if (new RegExp(`\\b${column.key}\\s*${r - 1}\\b`).test(cell.f)) cascade++;
+    } else if (typeof cell.v === 'number') {
+      numeric++;
+    }
+  }
+
+  if (cascade >= 2 && cascade >= numeric) return 'closing';
+  return 'sum';
+}
+
+function buildSummaryFormula(
+  column: SheetColumn,
+  cellData: Record<string, SheetCell>,
+  lastDataRow: number
+): { f: string; strategy: SummaryStrategy } {
+  const strategy = detectSummaryStrategy(column, cellData, lastDataRow);
+  const key = column.key;
+  switch (strategy) {
+    case 'average':
+      return { f: `=AVERAGE(${key}2:${key}${lastDataRow})`, strategy };
+    case 'closing':
+      // Report where the sheet ends up, not a meaningless accumulation.
+      return { f: `=${key}${lastDataRow}`, strategy };
+    case 'sum':
+    default:
+      return { f: `=SUM(${key}2:${key}${lastDataRow})`, strategy };
+  }
+}
+
+const EXCEL_ERROR = /^#(VALUE!|REF!|DIV\/0!|NAME\?|N\/A|NUM!|NULL!|ERROR!)$/i;
+
+/**
+ * Removes every formula that evaluates to an Excel error and restores the
+ * static value the schema agent produced for that row.
+ *
+ * A language model occasionally emits a formula wired to the wrong column - for
+ * example "Allowances = Employee Name - Basic Salary", where the name cell is
+ * text. The whole column then collapses to #VALUE! and takes every dependent
+ * SUM with it. Rejecting the bad formula is strictly better than shipping an
+ * error string to the user, and it keeps the row's own real data visible.
+ */
+function stripErroringFormulas(
+  cellData: Record<string, SheetCell>,
+  columns: SheetColumn[],
+  rawRows: Record<string, unknown>[],
+  lastDataRow: number
+): Record<string, SheetCell> {
+  const computed = recalculateWorkbook(cellData);
+  const result = { ...cellData };
+
+  rawRows.forEach((row, idx) => {
+    const r = idx + 2;
+    if (r > lastDataRow) return;
+    columns.forEach(c => {
+      const coord = `${c.key}${r}`;
+      const cell = cellData[coord];
+      if (!cell || !cell.f) return;
+
+      const value = computed[coord]?.v;
+      if (typeof value !== 'string' || !EXCEL_ERROR.test(value.trim())) return;
+
+      const fallback = row[c.key];
+      if (fallback === undefined || fallback === null) return;
+
+      result[coord] = { v: fallback as SheetCell['v'], align: cell.align, bold: cell.bold };
+    });
+  });
+
+  return result;
 }
 
 /**
@@ -46,11 +156,11 @@ STRICT RULES:
       maxTokens: 900,
       // Formula synthesis is deterministic by nature and the local AST compiler
       // is authoritative, so a slow model response is not worth blocking on.
-      timeoutMs: 12000,
+      timeoutMs: 6000,
     });
 
     if (bedrockResult.data && bedrockResult.data.formulaMap && Object.keys(bedrockResult.data.formulaMap).length > 0) {
-      const cellData = buildCellDataWithFormulas(schema, bedrockResult.data.formulaMap, bedrockResult.data.summaryRowLabel);
+      const cellData = buildCellDataWithFormulas(schema, bedrockResult.data.formulaMap);
       return {
         output: {
           cellData,
@@ -78,7 +188,7 @@ STRICT RULES:
 function buildCellDataWithFormulas(
   schema: SchemaArchitectOutput,
   aiFormulas: Record<string, string>,
-  summaryLabel = 'TOTAL'
+  summaryLabel = 'MODEL SUMMARY'
 ): Record<string, SheetCell> {
   const cellData: Record<string, SheetCell> = {};
   const { columns, rawRows } = schema;
@@ -117,6 +227,10 @@ function buildCellDataWithFormulas(
   });
 
   // 3. Summary Row
+  // Any model formula that resolves to an Excel error is dropped first, so the
+  // aggregate row is never built on top of a broken dependency chain.
+  const cleanCellData = stripErroringFormulas(cellData, columns, rawRows, lastDataRow);
+
   cellData[`A${summaryRow}`] = {
     v: summaryLabel,
     bold: true,
@@ -126,14 +240,24 @@ function buildCellDataWithFormulas(
   columns.slice(1).forEach(c => {
     const coord = `${c.key}${summaryRow}`;
     const customFormula = aiFormulas[coord];
-    if (customFormula && customFormula.startsWith('=') && !isCircularReference(customFormula, coord)) {
+    // A model-proposed =SUM() over a balance/cascade column is rejected: the
+    // deterministic strategy below decides how that column is really aggregated.
+    const safeCustom =
+      customFormula &&
+      customFormula.startsWith('=') &&
+      !isCircularReference(customFormula, coord) &&
+      !(/\bSUM\s*\(/i.test(customFormula) && detectSummaryStrategy(c, cleanCellData, lastDataRow) === 'closing');
+
+    if (safeCustom) {
       cellData[coord] = { f: customFormula, bold: true, align: 'right' };
-    } else if (c.type === 'percentage') {
-      cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
-    } else if (c.type === 'number' || c.type === 'currency') {
-      cellData[coord] = { f: `=SUM(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
+    } else if (c.type === 'percentage' || c.type === 'number' || c.type === 'currency') {
+      const { f } = buildSummaryFormula(c, cleanCellData, lastDataRow);
+      cellData[coord] = { f, bold: true, align: 'right' };
     }
   });
+
+  // 4. Hand back the repaired data rows alongside the summary row.
+  Object.assign(cellData, cleanCellData);
 
   return cellData;
 }
@@ -287,8 +411,12 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
   });
 
   // Summary Row (Row summaryRow)
+  // The label states what the row actually contains: a mix of totals and
+  // closing balances cannot honestly be called one flat "TOTAL".
+  const cleanCellData = stripErroringFormulas(cellData, columns, rawRows, lastDataRow);
+
   cellData[`A${summaryRow}`] = {
-    v: isAcademic ? 'CLASS AVERAGE' : 'TOTAL / MODEL SUMMARY',
+    v: isAcademic ? 'CLASS AVERAGE' : 'MODEL SUMMARY',
     bold: true,
     align: 'left',
   };
@@ -300,14 +428,16 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
         cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
         formulaCount++;
       }
-    } else if (c.type === 'percentage') {
-      cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
-      formulaCount++;
-    } else if (c.type === 'number' || c.type === 'currency') {
-      cellData[coord] = { f: `=SUM(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
+    } else if (c.type === 'percentage' || c.type === 'number' || c.type === 'currency') {
+      // Balance and carry-forward cascade columns report their closing value
+      // instead of an invalid running total.
+      const { f } = buildSummaryFormula(c, cleanCellData, lastDataRow);
+      cellData[coord] = { f, bold: true, align: 'right' };
       formulaCount++;
     }
   });
+
+  Object.assign(cellData, cleanCellData);
 
   return {
     cellData,

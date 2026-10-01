@@ -33,7 +33,7 @@ const UniverSheetCore = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full min-h-[500px] flex flex-col bg-slate-50 dark:bg-[#020617] border border-slate-200 dark:border-slate-800 select-none overflow-hidden font-mono">
+      <div className="w-full h-full absolute inset-0 flex flex-col bg-slate-50 dark:bg-[#020617] border border-slate-200 dark:border-slate-800 select-none overflow-hidden font-mono">
         {/* Top Formula Bar Skeleton */}
         <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100 dark:bg-slate-900/40">
           <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/50">fx</span>
