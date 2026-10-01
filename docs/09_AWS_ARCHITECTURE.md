@@ -32,9 +32,7 @@ flowchart LR
 
 ---
 
-## 3. Items Pending Decision [NEEDS DECISION]
+## 3. Approved Architectural Confirmations [DECIDED & IMPLEMENTED]
 
-* **[NEEDS DECISION] AWS Region Selection**: Region `us-east-1` (N. Virginia) vs `us-west-2` (Oregon).
-  * *Recommendation*: `us-east-1` has the highest quota availability for Claude 3.5 Sonnet.
-* **[NEEDS DECISION] Persistence Layer (DynamoDB vs S3 JSON Snapshots)**:
-  * For MVP, workbooks can be maintained in client session memory with S3 exports. Adding DynamoDB single-table design is an optional architectural enhancement.
+* **[APPROVED] AWS Region Selection (`ap-southeast-2`)**: Project assigned region is `ap-southeast-2` (Sydney) per AWS Hackathon Project guidelines. All regional resources (Bedrock, S3 snapshots, CloudWatch EMF) strictly target `ap-southeast-2`.
+* **[APPROVED] Persistence Architecture (Dual-Tier S3 + Client LocalStorage)**: Dual-tier persistence with client-side zero-latency LocalStorage (`sheetbrain_wb_*`) and Amazon S3 JSON snapshots via `/api/storage` with zero-crash in-memory fallback. (Fulfills REQ-F-006, REQ-NF-003).

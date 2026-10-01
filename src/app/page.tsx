@@ -15,6 +15,8 @@ import FormulaAuditor from '@/components/inspector/FormulaAuditor';
 import AgentPipelineBar from '@/components/pipeline/AgentPipelineBar';
 import StudioErrorBoundary from '@/components/common/StudioErrorBoundary';
 import ExportModal from '@/components/export/ExportModal';
+import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal';
+import BoardroomModal from '@/components/modals/BoardroomModal';
 import {
   FolderOpen,
   RefreshCw,
@@ -1703,205 +1705,23 @@ export default function SheetBrainStudio() {
       </div>
 
       {/* 4. Keyboard Shortcuts Modal */}
-      {showShortcutsModal && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowShortcutsModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/50 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 select-none"
-        >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl flex flex-col gap-4 text-xs text-slate-700 dark:text-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Keyboard className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">Keyboard Shortcuts</span>
-              </div>
-              <button
-                onClick={() => setShowShortcutsModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
-              <div>
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">View Navigation</div>
-                <div className="space-y-1">
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Spreadsheet Grid</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + 1</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Visual Analytics</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + 2</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Scenario Matrix</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + 3</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Formula Audit</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + 4</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Executive Report</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + 5</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Toggle Left Sidebar</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + B</kbd>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">AI & Spreadsheet Actions</div>
-                <div className="space-y-1">
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Focus AI Prompt Bar</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Ctrl + K</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Export Excel (.xlsx)</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + E</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Add New Sheet Tab</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + N</kbd>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/80">
-                    <span className="text-slate-600 dark:text-slate-400">Toggle Dark / Light Theme</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">Alt + T</kbd>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-slate-600 dark:text-slate-400">Show Shortcuts Help</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 font-semibold">F1 / ?</kbd>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-              <button
-                onClick={() => setShowShortcutsModal(false)}
-                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs transition shadow-md shadow-cyan-950/20 active:scale-[0.98]"
-              >
-                Got It
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
 
       {/* 5. Boardroom Executive Export Modal */}
-      {showBoardroomModal && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowBoardroomModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/50 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 select-none"
-        >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-4 text-xs text-slate-700 dark:text-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 shadow-inner">
-                  <Briefcase className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <span>Boardroom Executive Findings & Governance Briefing</span>
-                    <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 font-mono font-semibold">
-                      C-Suite Ready
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Automated governance audit and executive briefing for board-level decision review.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowBoardroomModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Overview KPI Cards */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 shadow-2xs">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Active Model</span>
-                <div className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1 truncate">{safeWorkbook.title}</div>
-                <div className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400 mt-0.5">
-                  {activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} Rows · {activeSheet?.columns?.length || 0} Cols
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 shadow-2xs">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Scenario State</span>
-                <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 truncate">
-                  {activeScenario ? 'Simulation Active' : 'Baseline Verified'}
-                </div>
-                <div className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400 mt-0.5">
-                  {activeScenario ? 'Deterministic Variance' : 'Standard Baseline'}
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 shadow-2xs">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Governance Integrity</span>
-                <div className="text-sm font-bold text-cyan-600 dark:text-cyan-400 mt-1 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 shrink-0" />
-                  <span>100% Passed</span>
-                </div>
-                <div className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400 mt-0.5">
-                  Zero Formula Injections
-                </div>
-              </div>
-            </div>
-
-            {/* Executive Summary Preview Box */}
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/90 font-mono text-[11px] text-slate-800 dark:text-slate-300 max-h-56 overflow-y-auto whitespace-pre-wrap leading-relaxed select-all shadow-inner">
-              {getBoardroomMarkdown()}
-            </div>
-
-            {/* Modal Actions */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCopyBoardroomMarkdown}
-                  className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition flex items-center gap-1.5 shadow-md shadow-cyan-950/20 active:scale-[0.98]"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Markdown</span>
-                </button>
-                <button
-                  onClick={handleDownloadBoardroomMarkdown}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 active:scale-[0.98]"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                  <span>Download .md</span>
-                </button>
-                <button
-                  onClick={handleCopyTSV}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 active:scale-[0.98]"
-                >
-                  <Table className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                  <span>Copy TSV Data</span>
-                </button>
-              </div>
-
-              <button
-                onClick={() => setShowBoardroomModal(false)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition border border-slate-200 dark:border-transparent active:scale-[0.98]"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BoardroomModal
+        isOpen={showBoardroomModal}
+        onClose={() => setShowBoardroomModal(false)}
+        workbook={safeWorkbook}
+        sheet={activeSheet}
+        activeScenario={activeScenario}
+        markdownContent={getBoardroomMarkdown()}
+        onCopyMarkdown={handleCopyBoardroomMarkdown}
+        onDownloadMarkdown={handleDownloadBoardroomMarkdown}
+        onCopyTSV={handleCopyTSV}
+      />
 
       {/* 6. Multi-Format Export Modal */}
       <ExportModal

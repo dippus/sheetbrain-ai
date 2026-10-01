@@ -19,9 +19,7 @@
 
 ---
 
-## 2. Technical Decisions Requiring Confirmation [NEEDS DECISION]
+## 2. Approved Technical Confirmations [DECIDED & IMPLEMENTED]
 
-* **[NEEDS DECISION] Univer Package Preset Selection**: Choice between `@univerjs/presets` all-in-one bundle vs modular packages (`@univerjs/core` + `@univerjs/sheets`).
-  * *Recommendation*: Use modular core packages to minimize client bundle size and optimize initial load time.
-* **[NEEDS DECISION] Client State Management**: React Context + hooks vs Zustand.
-  * *Recommendation*: React Context is sufficient for MVP scope, avoiding unnecessary dependencies.
+* **[APPROVED] Univer Modular Architecture**: Adopted modular core packages (`@univerjs/core`, `@univerjs/sheets`, `@univerjs/sheets-ui`, `@univerjs/ui`, `@univerjs/sheets-formula`) loaded exclusively via dynamic client imports (`ssr: false`) to safeguard against Next.js SSR Canvas crashes while minimizing bundle size.
+* **[APPROVED] Client State Architecture**: React Hooks (`useState`, `useCallback`, `useMemo`) with zero external state overhead, combined with deterministic HyperFormula engine recalculations.

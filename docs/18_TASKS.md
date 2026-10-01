@@ -1,4 +1,4 @@
-# 21 — Phased Development Task Breakdown
+# 18 — Phased Development Task Breakdown
 
 > **Traceability**: All tasks link directly to requirement IDs, deployment specifications, and submission criteria.
 
@@ -7,9 +7,9 @@
 ## Phase 1: Planning & Documentation (Status: COMPLETED & SIGNED OFF ✅)
 - [x] Create standardized documentation structure in `docs/`
 - [x] Formulate traceable Functional & Non-Functional Requirements (`03_REQUIREMENTS.md`)
-- [x] Formulate AWS Deployment & Production Hosting Plan (`18_DEPLOYMENT.md`)
+- [x] Formulate AWS Deployment & Production Hosting Plan (`23_DEPLOYMENT.md`)
 - [x] Formulate Hackathon Evidence Register (`19_EVIDENCE.md`)
-- [x] Formulate Final Pass/Fail Submission Checklist (`20_SUBMISSION_CHECKLIST.md`)
+- [x] Formulate Final Pass/Fail Submission Checklist (`21_SUBMISSION_CHECKLIST.md`)
 - [x] Create comprehensive `AGENTS.md` operating constitution
 - [x] Human user review and sign-off on documentation phase (Approved Sep 28, 2026)
 

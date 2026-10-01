@@ -8,9 +8,9 @@
 ## 1. How to Read Project Documentation
 
 Before writing any code or modifying existing files:
-1. Review [`docs/21_TASKS.md`](./docs/21_TASKS.md) to identify the currently active task.
+1. Review [`docs/18_TASKS.md`](./docs/18_TASKS.md) to identify the currently active task.
 2. Cross-reference the task with the relevant specifications in [`docs/03_REQUIREMENTS.md`](./docs/03_REQUIREMENTS.md) and [`docs/06_ARCHITECTURE.md`](./docs/06_ARCHITECTURE.md).
-3. Check [`docs/18_DECISIONS.md`](./docs/18_DECISIONS.md) to ensure your implementation aligns with approved Architectural Decision Records (ADRs).
+3. Check [`docs/19_DECISIONS.md`](./docs/19_DECISIONS.md) to ensure your implementation aligns with approved Architectural Decision Records (ADRs).
 4. If a requirement is marked `TBD` or `NEEDS DECISION`, DO NOT assume or invent functionality. Ask the human user for clarification first.
 
 ---
@@ -18,7 +18,7 @@ Before writing any code or modifying existing files:
 ## 2. Planning Before Implementation
 
 * **No Blind Coding**: Always outline your intended plan, files to touch, and potential failure modes before making multi-file modifications.
-* **Strict Scope Control**: Implement ONLY the task specified in `docs/21_TASKS.md`. Do NOT refactor unrelated code or perform unsolicited redesigns.
+* **Strict Scope Control**: Implement ONLY the task specified in `docs/18_TASKS.md`. Do NOT refactor unrelated code or perform unsolicited redesigns.
 * **Preserve Traceability**: In your implementation descriptions and commits, explicitly reference requirement IDs (e.g. *"Implements REQ-F-002"*).
 
 ---
