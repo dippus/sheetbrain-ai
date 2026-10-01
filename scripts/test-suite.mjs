@@ -314,6 +314,19 @@ runTest('CloudWatch EMF (Embedded Metric Format) Compliance', () => {
   assert.ok(emfPayload.LatencyMs > 0);
 });
 
+runTest('AWS CloudWatch SDK (@aws-sdk/client-cloudwatch) Direct Client Compliance', async () => {
+  const { CloudWatchClient, PutMetricDataCommand } = await import('@aws-sdk/client-cloudwatch');
+  assert.ok(typeof CloudWatchClient === 'function', 'CloudWatchClient must be a valid constructor');
+  assert.ok(typeof PutMetricDataCommand === 'function', 'PutMetricDataCommand must be a valid constructor');
+
+  const cmd = new PutMetricDataCommand({
+    Namespace: 'SheetBrainAI/Metrics',
+    MetricData: [{ MetricName: 'LatencyMs', Value: 120, Unit: 'Milliseconds' }],
+  });
+  assert.strictEqual(cmd.input.Namespace, 'SheetBrainAI/Metrics');
+  assert.strictEqual(cmd.input.MetricData[0].MetricName, 'LatencyMs');
+});
+
 // ---------------------------------------------------------
 // SUITE 6: Multi-Agent Autonomous Pipeline Invariants
 // ---------------------------------------------------------
