@@ -294,7 +294,8 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
           return;
         }
         if (c.key === 'G') {
-          cellData[coord] = { f: `=ROUND(F${r}/D${r},1)`, align: 'right' };
+          // Runway = Ending Cash / Net Burn. When burn <= 0 (cash-flow positive), runway is effectively infinite.
+          cellData[coord] = { f: `=IF(E${r}<=0,999,ROUND(F${r}/E${r},1))`, align: 'right' };
           formulaCount++;
           return;
         }
