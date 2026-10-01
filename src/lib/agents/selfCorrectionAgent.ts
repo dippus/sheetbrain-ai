@@ -40,6 +40,12 @@ interface AuditInput {
   /** Row index of the summary row, or null when the sheet has none. */
   summaryRow: number | null;
   lastDataRow: number;
+  /**
+   * Coordinate -> the value the schema agent originally supplied for that cell.
+   * A broken formula is repaired with this rather than a zero, so the row keeps
+   * showing its real data instead of silently becoming blank.
+   */
+  staticValues?: Record<string, string | number | boolean>;
 }
 
 /**
@@ -47,11 +53,18 @@ interface AuditInput {
  * together with the cell to write back, so the caller can apply them in bulk.
  */
 function auditSheet(input: AuditInput): { findings: CorrectionFinding[]; repairs: Record<string, SheetCell> } {
-  const { cellData, columnLabels, summaryRow, lastDataRow } = input;
+  const { cellData, columnLabels, summaryRow, lastDataRow, staticValues = {} } = input;
   const findings: CorrectionFinding[] = [];
   const repairs: Record<string, SheetCell> = {};
 
   const evaluated = recalculateWorkbook(cellData);
+
+  /** Value written back when a formula has to be discarded. */
+  const fallbackFor = (coord: string) => {
+    const supplied = staticValues[coord];
+    if (supplied !== undefined && supplied !== null) return supplied;
+    return 0;
+  };
 
   // --- DEFECT 1 & 2: erroring or self-referencing formulas in data rows ---
   for (const coord of Object.keys(cellData)) {
@@ -73,7 +86,7 @@ function auditSheet(input: AuditInput): { findings: CorrectionFinding[]; repairs
         action: 'removed_formula',
       });
       const { f: _discarded, ...rest } = cell;
-      repairs[coord] = { v: typeof cell.v === 'number' ? cell.v : 0, ...rest };
+      repairs[coord] = { v: fallbackFor(coord), ...rest };
       continue;
     }
 
@@ -89,7 +102,7 @@ function auditSheet(input: AuditInput): { findings: CorrectionFinding[]; repairs
         action: 'replaced_with_value',
       });
       const { f: _discarded, ...rest } = cell;
-      repairs[coord] = { v: typeof cell.v === 'number' ? cell.v : 0, ...rest };
+      repairs[coord] = { v: fallbackFor(coord), ...rest };
       continue;
     }
 
@@ -102,7 +115,7 @@ function auditSheet(input: AuditInput): { findings: CorrectionFinding[]; repairs
         action: 'replaced_with_value',
       });
       const { f: _discarded, ...rest } = cell;
-      repairs[coord] = { v: typeof cell.v === 'number' ? cell.v : 0, ...rest };
+      repairs[coord] = { v: fallbackFor(coord), ...rest };
     }
   }
 
@@ -145,6 +158,7 @@ export function executeSelfCorrection(
   columnLabels: Record<string, string>,
   summaryRow: number | null,
   lastDataRow: number,
+  staticValues: Record<string, string | number | boolean> = {},
   maxIterations = 3
 ): SelfCorrectionResult {
   let current = cellData;
@@ -159,6 +173,7 @@ export function executeSelfCorrection(
       columnLabels,
       summaryRow,
       lastDataRow,
+      staticValues,
     });
 
     if (findings.length === 0) {

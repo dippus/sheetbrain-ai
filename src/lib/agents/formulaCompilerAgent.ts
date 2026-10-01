@@ -1,5 +1,5 @@
 import { invokeBedrockAgent } from '@/lib/aws/bedrock';
-import { isCircularReference, recalculateWorkbook } from '@/lib/engine/formulaEngine';
+import { isCircularReference } from '@/lib/engine/formulaEngine';
 import { SheetCell, SheetColumn } from '@/types/sheet';
 import { SchemaArchitectOutput, FormulaCompilerOutput } from './types';
 
@@ -74,48 +74,6 @@ function buildSummaryFormula(
     default:
       return { f: `=SUM(${key}2:${key}${lastDataRow})`, strategy };
   }
-}
-
-const EXCEL_ERROR = /^#(VALUE!|REF!|DIV\/0!|NAME\?|N\/A|NUM!|NULL!|ERROR!)$/i;
-
-/**
- * Removes every formula that evaluates to an Excel error and restores the
- * static value the schema agent produced for that row.
- *
- * A language model occasionally emits a formula wired to the wrong column - for
- * example "Allowances = Employee Name - Basic Salary", where the name cell is
- * text. The whole column then collapses to #VALUE! and takes every dependent
- * SUM with it. Rejecting the bad formula is strictly better than shipping an
- * error string to the user, and it keeps the row's own real data visible.
- */
-function stripErroringFormulas(
-  cellData: Record<string, SheetCell>,
-  columns: SheetColumn[],
-  rawRows: Record<string, unknown>[],
-  lastDataRow: number
-): Record<string, SheetCell> {
-  const computed = recalculateWorkbook(cellData);
-  const result = { ...cellData };
-
-  rawRows.forEach((row, idx) => {
-    const r = idx + 2;
-    if (r > lastDataRow) return;
-    columns.forEach(c => {
-      const coord = `${c.key}${r}`;
-      const cell = cellData[coord];
-      if (!cell || !cell.f) return;
-
-      const value = computed[coord]?.v;
-      if (typeof value !== 'string' || !EXCEL_ERROR.test(value.trim())) return;
-
-      const fallback = row[c.key];
-      if (fallback === undefined || fallback === null) return;
-
-      result[coord] = { v: fallback as SheetCell['v'], align: cell.align, bold: cell.bold };
-    });
-  });
-
-  return result;
 }
 
 /**
@@ -227,10 +185,9 @@ function buildCellDataWithFormulas(
   });
 
   // 3. Summary Row
-  // Any model formula that resolves to an Excel error is dropped first, so the
-  // aggregate row is never built on top of a broken dependency chain.
-  const cleanCellData = stripErroringFormulas(cellData, columns, rawRows, lastDataRow);
-
+  // NOTE: erroring row formulas are NOT repaired here. Agent 5 owns correction
+  // for the whole pipeline, so that the trace reports what was actually fixed
+  // instead of silently swallowing defects upstream.
   cellData[`A${summaryRow}`] = {
     v: summaryLabel,
     bold: true,
@@ -246,18 +203,15 @@ function buildCellDataWithFormulas(
       customFormula &&
       customFormula.startsWith('=') &&
       !isCircularReference(customFormula, coord) &&
-      !(/\bSUM\s*\(/i.test(customFormula) && detectSummaryStrategy(c, cleanCellData, lastDataRow) === 'closing');
+      !(/\bSUM\s*\(/i.test(customFormula) && detectSummaryStrategy(c, cellData, lastDataRow) === 'closing');
 
     if (safeCustom) {
       cellData[coord] = { f: customFormula, bold: true, align: 'right' };
     } else if (c.type === 'percentage' || c.type === 'number' || c.type === 'currency') {
-      const { f } = buildSummaryFormula(c, cleanCellData, lastDataRow);
+      const { f } = buildSummaryFormula(c, cellData, lastDataRow);
       cellData[coord] = { f, bold: true, align: 'right' };
     }
   });
-
-  // 4. Hand back the repaired data rows alongside the summary row.
-  Object.assign(cellData, cleanCellData);
 
   return cellData;
 }
@@ -413,8 +367,6 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
   // Summary Row (Row summaryRow)
   // The label states what the row actually contains: a mix of totals and
   // closing balances cannot honestly be called one flat "TOTAL".
-  const cleanCellData = stripErroringFormulas(cellData, columns, rawRows, lastDataRow);
-
   cellData[`A${summaryRow}`] = {
     v: isAcademic ? 'CLASS AVERAGE' : 'MODEL SUMMARY',
     bold: true,
@@ -431,13 +383,11 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
     } else if (c.type === 'percentage' || c.type === 'number' || c.type === 'currency') {
       // Balance and carry-forward cascade columns report their closing value
       // instead of an invalid running total.
-      const { f } = buildSummaryFormula(c, cleanCellData, lastDataRow);
+      const { f } = buildSummaryFormula(c, cellData, lastDataRow);
       cellData[coord] = { f, bold: true, align: 'right' };
       formulaCount++;
     }
   });
-
-  Object.assign(cellData, cleanCellData);
 
   return {
     cellData,

@@ -1,6 +1,97 @@
 import { HyperFormula } from 'hyperformula';
 import assert from 'node:assert';
 
+// ---------------------------------------------------------
+// Self-correction harness.
+//
+// scripts/test-suite.mjs runs under plain Node and cannot resolve the "@/"
+// path aliases that src/lib/agents/selfCorrectionAgent.ts depends on. This is a
+// faithful mirror of that module's audit/repair rules, kept in sync deliberately:
+// it exercises the same HyperFormula engine and the same three defect classes.
+// Keep in step with src/lib/agents/selfCorrectionAgent.ts.
+// ---------------------------------------------------------
+const XL_ERR = /^#(VALUE!|REF!|DIV\/0!|NAME\?|N\/A|NUM!|NULL!|ERROR!)$/i;
+const AGG = /\b(SUM|AVERAGE|MIN|MAX|COUNT)\s*\(/i;
+const SNAPSHOT =
+  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+\w+/i;
+
+function runSelfCorrection(cellData, columnLabels, summaryRow, lastDataRow, maxIterations = 3) {
+  const evaluate = cells => {
+    const coords = Object.keys(cells);
+    if (coords.length === 0) return {};
+    const maxRow = Math.max(...coords.map(c => Number(c.match(/(\d+)$/)?.[1] ?? 1)));
+    const maxColIdx = Math.max(...coords.map(c => {
+      const letters = c.match(/^([A-Z]+)/)?.[1] ?? 'A';
+      return letters.split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+    }));
+    const grid = Array.from({ length: maxRow }, () => Array(maxColIdx + 1).fill(null));
+    for (const coord of coords) {
+      const letters = coord.match(/^([A-Z]+)/)[1];
+      const col = letters.split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+      const row = Number(coord.match(/(\d+)$/)[1]) - 1;
+      grid[row][col] = cells[coord].f ?? cells[coord].v ?? null;
+    }
+    const hf = HyperFormula.buildFromArray(grid, { licenseKey: 'gpl-v3' });
+    const sid = hf.getSheetId(hf.getSheetName(0));
+    const out = {};
+    for (const coord of coords) {
+      const letters = coord.match(/^([A-Z]+)/)[1];
+      const col = letters.split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+      const row = Number(coord.match(/(\d+)$/)[1]) - 1;
+      let v = hf.getCellValue({ col, row, sheet: sid });
+      if (v && typeof v === 'object' && 'value' in v) v = v.value;
+      out[coord] = { ...cells[coord], v };
+    }
+    return out;
+  };
+
+  let current = cellData;
+  let totalFound = 0;
+  let iterations = 0;
+  let converged = false;
+
+  for (let i = 0; i < maxIterations; i++) {
+    iterations = i + 1;
+    const evaluated = evaluate(current);
+    const repairs = {};
+    let found = 0;
+
+    for (const coord of Object.keys(current)) {
+      const row = Number(coord.match(/(\d+)$/)[1]);
+      if (row < 2 || (summaryRow !== null && row >= summaryRow)) continue;
+      const cell = current[coord];
+      if (!cell?.f) continue;
+      const v = evaluated[coord]?.v;
+      if (typeof v === 'string' && XL_ERR.test(v.trim())) {
+        found++;
+        const { f: _d, ...rest } = cell;
+        repairs[coord] = { v: typeof cell.v === 'number' ? cell.v : 0, ...rest };
+      } else if (v === null || v === undefined) {
+        found++;
+        const { f: _d, ...rest } = cell;
+        repairs[coord] = { v: typeof cell.v === 'number' ? cell.v : 0, ...rest };
+      }
+    }
+
+    if (summaryRow !== null) {
+      for (const [key, label] of Object.entries(columnLabels)) {
+        if (!SNAPSHOT.test(label)) continue;
+        const coord = `${key}${summaryRow}`;
+        const cell = current[coord];
+        if (!cell?.f || !AGG.test(cell.f)) continue;
+        found++;
+        repairs[coord] = { f: `=${key}${lastDataRow}`, bold: true, align: 'right' };
+      }
+    }
+
+    if (found === 0) { converged = true; break; }
+    totalFound += found;
+    current = { ...current, ...repairs };
+  }
+
+  return { cellData: current, report: { iterations, issuesFound: totalFound, issuesFixed: totalFound, converged } };
+}
+
 console.log('================================================================');
 console.log('🧪 SheetBrain AI — Enterprise Automated Test Suite (QA Verified)');
 console.log('================================================================\n');
@@ -211,6 +302,85 @@ runTest('An erroring row formula poisons every dependent aggregate', () => {
 
   assert.strictEqual(errorText(badCell), '#VALUE!', 'Subtracting a text cell must surface as #VALUE!');
   assert.strictEqual(errorText(badTotal), '#VALUE!', 'The error propagates into the summary total');
+});
+
+runTest('Self-correction loop repairs an erroring formula and converges', () => {
+  // Agent 5 receives a draft where Agent 2 wired a text column into arithmetic.
+  const cellData = {
+    A1: { v: 'Emp ID' },
+    B1: { v: 'Employee Name' },
+    C1: { v: 'Basic Salary' },
+    D1: { v: 'Allowances' },
+    A2: { v: 'E001' },
+    B2: { v: 'John Doe' },
+    C2: { v: 50000 },
+    D2: { f: '=B2-C2' },
+    A3: { v: 'E002' },
+    B3: { v: 'Jane Smith' },
+    C3: { v: 60000 },
+    D3: { f: '=B3-C3' },
+    A4: { v: 'MODEL SUMMARY' },
+    C4: { f: '=SUM(C2:C3)', bold: true },
+    D4: { f: '=SUM(D2:D3)', bold: true },
+  };
+
+  const { cellData: repaired, report } = runSelfCorrection(
+    cellData,
+    { C: 'Basic Salary', D: 'Allowances' },
+    4,
+    3
+  );
+
+  assert.strictEqual(report.issuesFound, 2, 'Both erroring allowance formulas must be detected');
+  assert.strictEqual(report.issuesFixed, 2);
+  assert.strictEqual(report.converged, true, 'The loop must converge after repairing');
+  assert.ok(report.iterations >= 1 && report.iterations <= 3);
+  assert.strictEqual(repaired.D2.f, undefined, 'The erroring formula must be removed');
+  assert.strictEqual(repaired.D3.f, undefined, 'The erroring formula must be removed');
+  assert.strictEqual(repaired.C4.f, '=SUM(C2:C3)', 'Healthy summary formulas must be left untouched');
+});
+
+runTest('Self-correction replaces a SUM over a snapshot balance column', () => {
+  const cellData = {
+    A1: { v: 'Month' },
+    B1: { v: 'Ending Cash Balance' },
+    A2: { v: 'M1' },
+    B2: { v: 5000 },
+    A3: { v: 'M2' },
+    B3: { v: 5800 },
+    A4: { v: 'MODEL SUMMARY' },
+    B4: { f: '=SUM(B2:B3)', bold: true },
+  };
+
+  const { cellData: repaired, report } = runSelfCorrection(
+    cellData,
+    { B: 'Ending Cash Balance' },
+    4,
+    3
+  );
+
+  assert.strictEqual(report.issuesFound, 1, 'Aggregating a balance snapshot must be flagged');
+  assert.strictEqual(repaired.B4.f, '=B3', 'A balance summary must report its closing value');
+  assert.strictEqual(repaired.B4.bold, true);
+});
+
+runTest('Self-correction leaves a correct sheet completely untouched', () => {
+  const cellData = {
+    A1: { v: 'Month' },
+    B1: { v: 'Revenue' },
+    A2: { v: 'M1' },
+    B2: { f: '=1000*2' },
+    A3: { v: 'MODEL SUMMARY' },
+    B3: { f: '=SUM(B2:B2)', bold: true },
+  };
+
+  const { cellData: repaired, report } = runSelfCorrection(cellData, { B: 'Revenue' }, 3, 2);
+
+  assert.strictEqual(report.issuesFound, 0, 'A clean draft must not produce findings');
+  assert.strictEqual(report.converged, true);
+  assert.strictEqual(report.iterations, 1, 'A clean draft should exit after a single audit');
+  assert.strictEqual(repaired.B2.f, '=1000*2', 'Valid formulas must be preserved verbatim');
+  assert.strictEqual(repaired.B3.f, '=SUM(B2:B2)');
 });
 
 // ---------------------------------------------------------

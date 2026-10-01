@@ -129,12 +129,78 @@ export async function executeMultiAgentPipeline(userPrompt: string): Promise<Mul
   });
 
   // ==========================================
+  // STAGE 5: AGENT 5 — SELF-CORRECTION LOOP
+  // ==========================================
+  // Stages 1-4 produce a first draft and never look back at it. This stage
+  // audits the recalculated grid, repairs every defect it can prove, and
+  // re-verifies until the sheet converges.
+  const step5Start = Date.now();
+  const lastDataRow = schemaResult.output.rawRows.length + 1;
+  const summaryRow = lastDataRow + 1;
+
+  const columnLabels: Record<string, string> = {};
+  for (const column of schemaResult.output.columns) {
+    columnLabels[column.key] = column.label;
+  }
+
+  // Original row values from Agent 1, so a broken formula is repaired with the
+  // sheet's real data rather than a placeholder zero.
+  const staticValues: Record<string, string | number | boolean> = {};
+  schemaResult.output.rawRows.forEach((row, idx) => {
+    const r = idx + 2;
+    for (const column of schemaResult.output.columns) {
+      const value = row[column.key];
+      if (value !== undefined && value !== null) staticValues[`${column.key}${r}`] = value as string | number;
+    }
+  });
+
+  const correction = executeSelfCorrection(
+    formulaResult.output.cellData,
+    columnLabels,
+    summaryRow,
+    lastDataRow,
+    staticValues
+  );
+  const step5Latency = Date.now() - step5Start;
+
+  // Repairs changed the grid, so Agent 4 must recalculate again to produce the
+  // authoritative values the user actually sees.
+  const finalCells = correction.report.issuesFixed > 0
+    ? recalculateWorkbook(correction.cellData)
+    : calculatedCells;
+
+  steps.push({
+    agentId: 'agent_5_self_correction',
+    name: 'Agent 5: Self-Correction',
+    role: 'Audit, Repair & Converge Until Defect-Free',
+    status: correction.report.converged ? 'SUCCESS' : 'ERROR',
+    latencyMs: step5Latency,
+    details: {
+      iterations: correction.report.iterations,
+      issuesFound: correction.report.issuesFound,
+      issuesFixed: correction.report.issuesFixed,
+      converged: correction.report.converged,
+    },
+  });
+
+  logCloudWatchMetric({
+    operation: 'Agent5_SelfCorrection',
+    latencyMs: step5Latency,
+    status: correction.report.converged ? 'SUCCESS' : 'ERROR',
+    isFallback: false,
+    metadata: {
+      issuesFixed: correction.report.issuesFixed,
+      iterations: correction.report.iterations,
+    },
+  });
+
+  // ==========================================
   // ASSEMBLE LIVING WORKBOOK MODEL
   // ==========================================
   const totalLatencyMs = Date.now() - pipelineStartTime;
   const isPureDeterministic = schemaResult.isFallback && formulaResult.isFallback;
 
-  const totalCalculatedCells = Object.keys(calculatedCells).length;
+  const totalCalculatedCells = Object.keys(finalCells).length;
   const workbook: WorkbookModel = {
     id: `wb_${Date.now()}`,
     title: schemaResult.output.title,
@@ -148,7 +214,7 @@ export async function executeMultiAgentPipeline(userPrompt: string): Promise<Mul
         rowCount: Math.max(totalCalculatedCells + 5, 20),
         columnCount: schemaResult.output.columns.length,
         columns: schemaResult.output.columns,
-        cellData: calculatedCells,
+        cellData: finalCells,
       },
     ],
   };
@@ -160,6 +226,7 @@ export async function executeMultiAgentPipeline(userPrompt: string): Promise<Mul
     userPrompt,
     steps,
     isPureDeterministic,
+    selfCorrection: correction.report,
   };
 
   // Overall Pipeline Log
@@ -171,6 +238,7 @@ export async function executeMultiAgentPipeline(userPrompt: string): Promise<Mul
     metadata: {
       stepsCount: steps.length,
       pipelineId,
+      selfCorrectedIssues: correction.report.issuesFixed,
     },
   });
 

@@ -22,6 +22,7 @@ export type CloudWatchOperation =
   | 'Agent2_FormulaCompiler'
   | 'Agent3_VisualAnalytics'
   | 'Agent4_DeterministicEngine'
+  | 'Agent5_SelfCorrection'
   | 'GenerateWorkbook_MultiAgentPipeline'
   | 'EditPlanner'
   | 'ApplyEditOperations';
