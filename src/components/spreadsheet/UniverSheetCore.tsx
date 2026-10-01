@@ -374,8 +374,8 @@ export default function UniverSheetCore({
 
         if (isNonMutation) return;
 
-        // Fast sync (50ms) for cell edits / confirm / undo / redo to feel instantaneous
-        const isFastSync = cmdId.includes('undo') || cmdId.includes('redo') || cmdId.includes('set-range-values') || cmdId.includes('edit-visible') || cmdId.includes('set-cell-value');
+        // Snappy sync (100ms) for cell edits / confirm / undo / redo to synchronize without lag
+        const isCellMutation = cmdId.includes('undo') || cmdId.includes('redo') || cmdId.includes('set-range-values') || cmdId.includes('set-cell-value');
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
@@ -383,7 +383,7 @@ export default function UniverSheetCore({
         debounceTimerRef.current = setTimeout(() => {
           if (destroyed) return;
           extractAndSyncSheet(fWorkbook);
-        }, isFastSync ? 50 : 200);
+        }, isCellMutation ? 100 : 250);
       });
     } catch (err) {
       console.warn('Univer initialization fallback:', err);
@@ -412,7 +412,7 @@ export default function UniverSheetCore({
       });
       univerRef.current = null;
     };
-  }, [(sheets || [sheet]).map(s => `${s.id}_${s.rowCount}_${Object.keys(s.cellData || {}).length}`).join('__'), theme, activeSheetId, sheet.id]);
+  }, [theme, sheet.id]);
 
   return (
     <div className="flex-1 w-full h-full min-h-0 relative overflow-hidden bg-white dark:bg-[#090d16]">

@@ -637,7 +637,7 @@ export default function UniverSheetWrapper({
       {/* 3. Univer Canvas Workspace */}
       <div className="flex-1 w-full h-full min-h-0 relative">
         <UniverSheetCore
-          key={`univer_${sheet.id}_${activeSheetId || 'default'}_${theme}_${activeScenario || 'base'}_rev${wrapperRevision}_${(sheets || [sheet]).map(s => `${s.id}_${s.rowCount}_${Object.keys(s.cellData || {}).length}`).join('__')}`}
+          key={`univer_${sheet.id}_${theme}_${activeScenario || 'base'}_rev${wrapperRevision}_${(sheets || [sheet]).map(s => s.id).join('_')}`}
           sheet={sheet}
           sheets={sheets}
           activeSheetId={activeSheetId}
