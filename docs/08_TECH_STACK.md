@@ -13,7 +13,7 @@
 | **Spreadsheet Engine** | Univer Office SDK | `@univerjs/core`, `@univerjs/sheets` | High-performance HTML5 Canvas rendering, built-in formula parser, Facade API for programmatic cell manipulation. |
 | **Styling** | Tailwind CSS | `^3.4.x` | Rapid utility styling, zero runtime overhead, responsive layout control. |
 | **Visualization** | Recharts | `^2.12.x` | React-native SVG chart library with declarative data bindings and fluid animations. |
-| **Cloud AI** | Amazon Bedrock | `@aws-sdk/client-bedrock-runtime` | Enterprise GenAI runtime; flagship Claude 3.5 Sonnet model for complex mathematical and structural reasoning. |
+| **Cloud AI** | Amazon Bedrock | `@aws-sdk/client-bedrock-runtime` / Bedrock Mantle | Enterprise GenAI runtime; `deepseek.v3.2` model on Amazon Bedrock Mantle (Sydney `ap-southeast-2`) for complex structural and spreadsheet reasoning, with Bedrock SDK multi-model support. |
 | **Hosting & CI/CD** | AWS Amplify | Gen 2 / Hosting | Native AWS deployment, automatic SSL/HTTPS, instant GitHub repository builds. |
 | **Observability** | Amazon CloudWatch | Embedded Metric Format (EMF) | Production observability for latency, agent invocation tracking, and cost monitoring. |
 

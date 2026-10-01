@@ -9,7 +9,7 @@
 SheetBrain AI adopts a **Hybrid Serverless Architecture**:
 * **Client Layer**: Next.js 14 App Router (React, Tailwind CSS, Univer Office SDK, Recharts).
 * **API / Orchestration Layer**: Next.js Serverless Edge/Node Route Handlers orchestrating multi-agent tasks.
-* **AI Cognitive Engine**: Amazon Bedrock running Claude 3.5 Sonnet.
+* **AI Cognitive Engine**: Amazon Bedrock running `deepseek.v3.2` on Bedrock Mantle (`ap-southeast-2`), with Bedrock SDK multi-model support.
 * **Deterministic Execution Engine**: Custom TypeScript parser for formula syntax tree validation and local instant fallback.
 * **Hosting**: AWS Amplify with global CDN.
 
@@ -40,10 +40,10 @@ graph TD
         LocalEng["Local Deterministic Engine (TS Fallback)"]
     end
 
-    subgraph CloudServices ["AWS Cloud Services"]
-        Bedrock["Amazon Bedrock (Claude 3.5 Sonnet)"]
-        CloudWatch["Amazon CloudWatch (Telemetry)"]
-        S3["Amazon S3 (Template Assets & Exports)"]
+    subgraph CloudServices ["AWS Cloud Services (ap-southeast-2)"]
+        Bedrock["Amazon Bedrock (deepseek.v3.2 on Bedrock Mantle)"]
+        CloudWatch["Amazon CloudWatch (SDK & EMF Telemetry)"]
+        S3["Amazon S3 (with In-Memory Fallback)"]
     end
 
     UI --> State

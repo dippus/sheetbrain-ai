@@ -55,7 +55,7 @@
   },
   "executionMetrics": {
     "latencyMs": 1820,
-    "model": "anthropic.claude-3-5-sonnet"
+    "model": "deepseek.v3.2"
   }
 }
 ```

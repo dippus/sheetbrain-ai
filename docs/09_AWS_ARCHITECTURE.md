@@ -8,11 +8,11 @@
 
 | # | AWS Service | Purpose in SheetBrain AI |
 |:---|:---|:---|
-| 1 | **AWS Amplify Hosting** | Hosts the Next.js 14 web application with automatic CI/CD and edge CDN. |
-| 2 | **Amazon Bedrock** | Multi-agent reasoning brain utilizing Claude 3.5 Sonnet (`anthropic.claude-3-5-sonnet-20240620-v1:0`). |
-| 3 | **Amazon CloudWatch** | Application metrics, generation latency tracking, and error observability. |
-| 4 | **Amazon S3** | Storage for exported workbook files (`.xlsx`, `.csv`) and pre-generated static templates. |
-| 5 | **AWS IAM** | Execution roles following least-privilege principles without embedded API keys. |
+| 1 | **AWS Amplify Hosting** | Hosts the Next.js 14 web application with automatic CI/CD and CloudFront edge distribution. |
+| 2 | **Amazon Bedrock** | Multi-agent reasoning brain utilizing `deepseek.v3.2` on Amazon Bedrock Mantle in Sydney (`ap-southeast-2`), with Bedrock SDK multi-model fallback. |
+| 3 | **Amazon CloudWatch** | Application metrics, generation latency tracking, and error observability via SDK & Embedded Metric Format (EMF). |
+| 4 | **Amazon S3 (with In-Memory Fallback)** | Dual-tier workbook snapshot storage via `/api/storage`. Persists to Amazon S3 (`ap-southeast-2`) when bucket credentials exist, with automatic zero-crash in-memory fallback for unauthenticated environments. |
+| 5 | **AWS IAM** | Scoped execution policies following least-privilege principles without exposed secrets. |
 
 ---
 
@@ -21,12 +21,12 @@
 ```mermaid
 flowchart LR
     User["End User / Judge"] -->|HTTPS| CDN["AWS Amplify CDN Edge"]
-    CDN --> NextApp["Next.js Serverless Runtime"]
+    CDN --> NextApp["Next.js Serverless Runtime (ap-southeast-2)"]
     
     subgraph "Backend Execution"
-        NextApp -->|InvokeModel| Bedrock["Amazon Bedrock (Claude 3.5 Sonnet)"]
-        NextApp -->|PutMetricData| CloudWatch["Amazon CloudWatch"]
-        NextApp -->|PutObject / GetObject| S3["Amazon S3 Storage"]
+        NextApp -->|ChatCompletions / Invoke| Bedrock["Amazon Bedrock (deepseek.v3.2 on Bedrock Mantle)"]
+        NextApp -->|PutMetricData / EMF| CloudWatch["Amazon CloudWatch"]
+        NextApp -->|PutObject / Memory Fallback| S3["Amazon S3 (with In-Memory Fallback)"]
     end
 ```
 

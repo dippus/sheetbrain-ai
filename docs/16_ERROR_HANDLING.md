@@ -15,7 +15,7 @@
 * **Input Sanitization**: Pre-flight validation rejects nonsense prompts, greetings, and OWASP formula injection prefixes (`=cmd|`, `@`, `+`, `-`).
 
 ## 3. AI Agent Error Handling
-* **Bedrock Timeout Trapping**: Every cloud model call to Amazon Bedrock (`anthropic.claude-3-5-sonnet-20240620-v1:0`, configurable via `BEDROCK_MODEL_ID`) is wrapped in a 5000ms `AbortSignal.timeout` trap. On timeout, quota exhaustion, or malformed response, the call resolves to a safe fallback rather than throwing.
+* **Bedrock Timeout Trapping**: Every cloud model call to Amazon Bedrock (`deepseek.v3.2` on Bedrock Mantle / Sydney `ap-southeast-2`, configurable via `BEDROCK_MODEL_ID`) is wrapped in an `AbortSignal.timeout` trap. On timeout, quota exhaustion, or malformed response, the call resolves to a safe fallback rather than throwing.
 * **Autonomous Fallback Execution**: When network timeouts, quota limits, or credential errors occur, the orchestrator seamlessly routes execution to the local deterministic multi-agent synthesizer with zero UI interruption.
 
 ## 4. Formula Error Reporting

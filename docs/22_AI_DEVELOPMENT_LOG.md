@@ -217,3 +217,13 @@
 * **Summary Row Double-Counting Fix in Visual Analytics**: In [`VisualAnalyticsView.tsx`](../src/components/views/VisualAnalyticsView.tsx), the aggregation row (`TOTAL / MODEL SUMMARY` or `CLASS AVERAGE`) was previously included in observations, causing 2x doubled aggregates ($1.2M), peak observation being the sum, and pie chart having 50% "TOTAL". Added `isSummaryRow()` filter across trend, pie, ranking, and statistical audit tables.
 * **Scenario Matrix Academic Awareness**: In [`scenarioEngine.ts`](../src/lib/engine/scenarioEngine.ts) and [`ScenarioMatrixView.tsx`](../src/components/views/ScenarioMatrixView.tsx), excluded summary rows from `realRows` (fixing doubled baseline) and added academic scenarios (Curricular Mastery, Remedial Boost, Exam Difficulty Spike, Attendance Dip) without currency formatting for student marks.
 
+---
+
+## 2026-10-02 — Pre-Submission Documentation Truth Alignment & Regional Compliance
+
+### Inaccuracies Remediated (Zero False Claims)
+* **Model ID Ground Truth Alignment**: Corrected outdated references in [`06_ARCHITECTURE.md`](./06_ARCHITECTURE.md), [`08_TECH_STACK.md`](./08_TECH_STACK.md), [`09_AWS_ARCHITECTURE.md`](./09_AWS_ARCHITECTURE.md), [`13_API_SPEC.md`](./13_API_SPEC.md), [`16_ERROR_HANDLING.md`](./16_ERROR_HANDLING.md), [`20_DEMO_SCRIPT.md`](./20_DEMO_SCRIPT.md), and [`README.md`](../README.md). Accurately documented that the active inference engine runs `deepseek.v3.2` on Amazon Bedrock Mantle in Sydney (`ap-southeast-2`), with Bedrock SDK multi-model fallback.
+* **Storage Resilience Transparency**: Corrected [`09_AWS_ARCHITECTURE.md`](./09_AWS_ARCHITECTURE.md) and [`06_ARCHITECTURE.md`](./06_ARCHITECTURE.md) from unqualified "Amazon S3 Storage" to dual-tier hybrid persistence: Amazon S3 object storage when AWS IAM keys/buckets exist, backed by zero-crash in-memory and client-side snapshot fallback for unauthenticated environments.
+* **Live Deployment Ship Gate Documentation**: Updated [`19_EVIDENCE.md`](./19_EVIDENCE.md) and [`README.md`](../README.md) to explicitly document and link the live AWS Amplify production deployment: [`https://main.d36a9s34xgy54i.amplifyapp.com`](https://main.d36a9s34xgy54i.amplifyapp.com).
+* **AWS Region Invariant Enforced**: Corrected [`23_DEPLOYMENT.md`](./23_DEPLOYMENT.md) from `us-east-1` to `ap-southeast-2` (Sydney), strictly ensuring zero cross-region policy discrepancies with AWS Hackathon managed project rules.
+

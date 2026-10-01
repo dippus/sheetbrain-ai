@@ -2,7 +2,10 @@
 
 > **Transform Natural Language into Living, Formula-Driven Spreadsheets & Visual Dashboards in Seconds.**
 
-[![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude%203.5-orange.svg)](https://aws.amazon.com/bedrock/)
+🚀 **Live Deployment**: [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com)
+
+[![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20deepseek.v3.2-orange.svg)](https://aws.amazon.com/bedrock/)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-AWS%20Amplify-success.svg)](https://main.d36a9s34xgy54i.amplifyapp.com)
 [![Univer Office SDK](https://img.shields.io/badge/Univer-Office%20SDK-blue.svg)](https://univer.ai/)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14%20App%20Router-black.svg)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -45,7 +48,7 @@ Most AI tools (like ChatGPT or Claude) only output **dead text or static markdow
 
 ## 🧠 How It Works (Autonomous Multi-Agent Pipeline)
 
-SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock (Claude 3.5 Sonnet)** and a local deterministic engine:
+SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock (`deepseek.v3.2` on Bedrock Mantle / Sydney `ap-southeast-2`)** and a local deterministic engine:
 
 ```
   ┌────────────────────────────────────────────────────────────────────────┐
@@ -93,9 +96,9 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 | **Spreadsheet Engine** | **Univer Office SDK** (`@univerjs/core`, `@univerjs/sheets`) | Canvas-based Excel-grade spreadsheet runtime |
 | **Styling & UI** | **Tailwind CSS + Lucide Icons** | Modern dark/light mode, sleek glassmorphism studio UI |
 | **Charts** | **Recharts + Univer Charts** | Responsive, dynamic business visualizations |
-| **Generative AI** | **Amazon Bedrock (Claude 3.5 Sonnet / DeepSeek)** | Semantic reasoning, ontology mapping & multi-agent intent |
+| **Generative AI** | **Amazon Bedrock (deepseek.v3.2 on Bedrock Mantle, ap-southeast-2)** | Semantic reasoning, ontology mapping & multi-agent intent |
 | **Formula Engine** | **HyperFormula v3.4.0 (Open-Source DAG Engine)** | Instant (<50ms) reactive dependency graph, IF(), VLOOKUP(), aggregations |
-| **Hosting & CI/CD** | **AWS Amplify** | Serverless hosting with global edge CDN |
+| **Hosting & CI/CD** | **AWS Amplify Hosting (ap-southeast-2)** | Serverless hosting with CloudFront edge distribution |
 
 ---
 

@@ -9,10 +9,10 @@
 
 | Component | Selection | Specification |
 |:---|:---|:---|
-| **Hosting Platform** | AWS Amplify Hosting (Gen 2 / SSR) | Managed Next.js 14 serverless hosting with global CloudFront edge distribution. |
-| **Region** | `us-east-1` (N. Virginia) | Primary region for Bedrock Claude 3.5 Sonnet quota and low-latency API execution. |
+| **Hosting Platform** | AWS Amplify Hosting (SSR) | Managed Next.js 14 serverless hosting with global CloudFront edge distribution. |
+| **Region** | `ap-southeast-2` (Sydney) | Mandatory project region. All regional services (Amazon Bedrock Mantle, CloudWatch, S3) execute strictly within `ap-southeast-2` to eliminate cross-region latency and enforce policy compliance. |
 | **SSL / HTTPS** | AWS Amplify Managed SSL | Automatic TLS certificate provisioning on `*.amplifyapp.com` domain. |
-| **Domain** | Public Amplify URL | `https://main.<app-id>.amplifyapp.com` (Publicly accessible without VPN or basic auth). |
+| **Domain** | Public Amplify Live URL | [https://main.d36a9s34xgy54i.amplifyapp.com](https://main.d36a9s34xgy54i.amplifyapp.com) (Live production deployment, publicly accessible without login or VPN). |
 
 ---
 
@@ -43,14 +43,15 @@ frontend:
 
 ## 3. Environment Variables Configuration
 
-The following variables must be configured in the AWS Amplify Console under **App Settings > Environment Variables**:
+The following variables are configured in the AWS Amplify Console under **App Settings > Environment Variables**:
 
 | Variable Name | Environment | Purpose | Sensitivity |
 |:---|:---|:---|:---:|
-| `BEDROCK_REGION` | Production | `us-east-1` | Low |
-| `BEDROCK_MODEL_ID` | Production | `anthropic.claude-3-5-sonnet-20240620-v1:0` | Low |
-| `AWS_ACCESS_KEY_ID` | Build / Runtime | Scoped IAM user / role for Bedrock invocation | HIGH (Never commit) |
-| `AWS_SECRET_ACCESS_KEY` | Build / Runtime | Scoped IAM secret | HIGH (Never commit) |
+| `BEDROCK_REGION` | Production | `ap-southeast-2` (Sydney) | Low |
+| `BEDROCK_MODEL_ID` | Production | `deepseek.v3.2` (Amazon Bedrock Mantle endpoint) | Low |
+| `AWS_BEARER_TOKEN_BEDROCK` | Production | AWS Bedrock API authentication key for Mantle | HIGH (Configured via Amplify Console) |
+| `AWS_ACCESS_KEY_ID` | Build / Runtime | Scoped IAM user / role for S3 and CloudWatch (optional) | HIGH (Never commit) |
+| `AWS_SECRET_ACCESS_KEY` | Build / Runtime | Scoped IAM secret (optional) | HIGH (Never commit) |
 
 ---
 

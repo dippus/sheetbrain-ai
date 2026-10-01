@@ -4,6 +4,7 @@ import { WorkbookModel } from '@/types/sheet';
 import { executeSchemaArchitect } from './schemaArchitectAgent';
 import { executeFormulaCompiler } from './formulaCompilerAgent';
 import { executeVisualAnalytics } from './visualAnalyticsAgent';
+import { executeSelfCorrection } from './selfCorrectionAgent';
 import { AgentExecutionStep, AgentPipelineTrace, MultiAgentPipelineResult } from './types';
 
 /**
