@@ -8,6 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "sync-data": "node scripts/sync-local-data.mjs",
+    "test": "node scripts/test-suite.mjs",
+    "test:all": "npm run typecheck && node scripts/test-suite.mjs",
     "test:bedrock": "node scripts/test-bedrock.mjs",
     "test:formulas": "node scripts/test-formula-engine.mjs"
   },
