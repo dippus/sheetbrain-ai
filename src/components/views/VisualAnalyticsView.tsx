@@ -102,10 +102,16 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
       else cat.push(c);
     });
 
-    // Pick best default X axis: prefer column with Date/Period/Month/Category or first column
+    // 1. Check if chartConfig explicitly defines a valid X-axis key or matching column
+    const configCol = chartConfig?.xAxisKey
+      ? safeColumns.find(c => c.key === chartConfig.xAxisKey || c.label.toLowerCase() === chartConfig.xAxisKey.toLowerCase())
+      : undefined;
+
+    // Pick best default X axis: prefer explicit chartConfig, then temporal/categorical column with Date/Period/Month/Horizon/Category
     const bestX =
-      cat.find(c => /date|period|month|time|year|horizon/i.test(c.label)) ||
-      cat.find(c => /category|item|name|department|author/i.test(c.label)) ||
+      configCol ||
+      cat.find(c => /date|period|month|time|year|horizon|quarter/i.test(c.label)) ||
+      cat.find(c => /category|item|name|department|author|product|subject|student|project/i.test(c.label)) ||
       cat[0] ||
       safeColumns[0];
 
@@ -114,7 +120,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
       categoricalCols: cat,
       defaultXKey: bestX?.key || 'A',
     };
-  }, [safeColumns, cellMap, totalRows]);
+  }, [safeColumns, cellMap, totalRows, chartConfig]);
 
   // 2. Interactive Selection State
   const [selectedXKey, setSelectedXKey] = useState<string>(defaultXKey);
@@ -127,7 +133,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
     setSelectedXKey(defaultXKey);
     const initial = numericCols.slice(0, 3).map(c => c.key);
     setSelectedSeriesKeys(initial);
-  }, [defaultXKey, numericCols]);
+  }, [defaultXKey, sheet?.id, numericCols]);
 
   const xCol = safeColumns.find(c => c.key === selectedXKey) || safeColumns[0];
   const primaryCol = numericCols.find(c => c.key === selectedSeriesKeys[0]) || numericCols[0];
@@ -409,11 +415,24 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
               onChange={(e) => setSelectedXKey(e.target.value)}
               className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono font-medium cursor-pointer transition-colors shadow-sm"
             >
-              {safeColumns.map(c => (
-                <option key={c.key} value={c.key}>
-                  {c.label || c.key} ({c.type})
-                </option>
-              ))}
+              {categoricalCols.length > 0 && (
+                <optgroup label="Categories & Time Horizons (Recommended)">
+                  {categoricalCols.map(c => (
+                    <option key={c.key} value={c.key}>
+                      {c.label || c.key} ({c.type})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {numericCols.length > 0 && (
+                <optgroup label="Numeric Values">
+                  {numericCols.map(c => (
+                    <option key={c.key} value={c.key}>
+                      {c.label || c.key} ({c.type})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 

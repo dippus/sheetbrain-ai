@@ -48,11 +48,11 @@ export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
     chartConfig: {
       type: 'line',
       title: 'Monthly Revenue vs OpEx Burn',
-      xAxisKey: 'Month',
+      xAxisKey: 'A',
       series: [
-        { key: 'Revenue', label: 'Monthly Revenue ($)', color: '#10b981' },
-        { key: 'OpEx', label: 'Operating Expenses ($)', color: '#ef4444' },
-        { key: 'NetCash', label: 'Net Cash Flow ($)', color: '#38bdf8' },
+        { key: 'B', label: 'Monthly Revenue ($)', color: '#10b981' },
+        { key: 'C', label: 'Operating Expenses ($)', color: '#ef4444' },
+        { key: 'D', label: 'Net Cash Flow ($)', color: '#38bdf8' },
       ],
     },
     suggestedScenarios: [
@@ -114,11 +114,11 @@ export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
     chartConfig: {
       type: 'bar',
       title: 'Insertions (+) vs Deletions (-) by Revision',
-      xAxisKey: 'Commit Hash',
+      xAxisKey: 'A',
       series: [
-        { key: 'Insertions', label: 'Insertions (+)', color: '#2563eb' },
-        { key: 'Deletions', label: 'Deletions (-)', color: '#ef4444' },
-        { key: 'FilesChanged', label: 'Files Changed', color: '#0d9488' },
+        { key: 'E', label: 'Insertions (+)', color: '#2563eb' },
+        { key: 'F', label: 'Deletions (-)', color: '#ef4444' },
+        { key: 'D', label: 'Files Changed', color: '#0d9488' },
       ],
     },
     suggestedScenarios: [
@@ -182,9 +182,9 @@ export const GOLDEN_TEMPLATES: Record<string, WorkbookModel> = {
     chartConfig: {
       type: 'bar',
       title: 'Dependency Distribution by Type',
-      xAxisKey: 'PackageName',
+      xAxisKey: 'A',
       series: [
-        { key: 'Version', label: 'Version', color: '#2563eb' },
+        { key: 'C', label: 'Type', color: '#2563eb' },
       ],
     },
     suggestedScenarios: [

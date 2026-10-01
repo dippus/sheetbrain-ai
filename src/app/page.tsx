@@ -292,7 +292,7 @@ export default function SheetBrainStudio() {
     setActiveScenario(undefined);
     setActiveView('grid');
     setGridRevision(r => r + 1);
-    showToast('ðŸ—‘ï¸ All datasets cleared â€” clean blank spreadsheet ready');
+    showToast('All datasets cleared — clean blank spreadsheet ready');
   }, [showToast]);
 
   // 5. Template & Local File Selector Callback (Real disk reading via /api/local-data)
@@ -495,7 +495,7 @@ export default function SheetBrainStudio() {
               if (data.success && data.workbook) {
                 setCurrentWorkbook(data.workbook);
                 setActiveSheetId(data.workbook.sheets[0]?.id || 'sheet_1');
-                showToast(`â˜ï¸ Loaded shared workbook "${data.workbook.title}" from Amazon S3!`);
+                showToast(`Cloud Sync: Loaded shared workbook "${data.workbook.title}" from Amazon S3!`);
               }
             })
             .catch(e => console.warn('[Cloud Load] Notice:', e));
@@ -730,7 +730,7 @@ export default function SheetBrainStudio() {
         localStorage.setItem('sheetbrain_active_sheet_id', 'sheet_1');
       } catch (e) {}
     }
-    showToast(`Deleted from workspace â€” clean blank sheet ready`);
+    showToast('Deleted from workspace — clean blank sheet ready');
   }, [datasets, activeTemplateKey, showToast]);
 
   const handleRenameSheet = useCallback((sheetId: string, newName: string) => {
@@ -949,8 +949,8 @@ export default function SheetBrainStudio() {
         } catch (e) {}
         showToast(
           data.isFallback
-            ? `â˜ï¸ Persisted snapshot! Share link copied: ${shareUrl}`
-            : `â˜ï¸ Saved to Amazon S3 (ap-southeast-2)! Share link copied: ${shareUrl}`,
+            ? `Persisted snapshot! Share link copied: ${shareUrl}`
+            : `Saved to Amazon S3 (ap-southeast-2)! Share link copied: ${shareUrl}`,
           'success'
         );
       } else {
@@ -1113,7 +1113,7 @@ export default function SheetBrainStudio() {
           });
 
           const stepsCount = data.trace?.steps?.length || 4;
-          showToast(`âš¡ 4-Agent Pipeline Completed (${stepsCount} Stages) & Auto-Saved to AWS: "${wb.title}"`);
+          showToast(`4-Agent Pipeline Completed (${stepsCount} Stages) & Auto-Saved to AWS: "${wb.title}"`);
         }
       } else {
         const errJson = await res.json().catch(() => null);
@@ -1333,7 +1333,7 @@ export default function SheetBrainStudio() {
     const modelTitle = safeWorkbook?.title || 'SheetBrain Financial Model';
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     
-    return `# ðŸ›ï¸ Executive Boardroom Briefing: ${modelTitle}
+    return `# Executive Boardroom Briefing: ${modelTitle}
 *Generated on ${dateStr} by SheetBrain AI (Bedrock Multi-Agent + Univer Office Engine)*
 
 ## 1. Executive Summary & Model Overview
@@ -1359,7 +1359,7 @@ export default function SheetBrainStudio() {
 3. Review formula dependencies in Formula Auditor before boardroom distribution.
 
 ---
-*SheetBrain AI â€” Enterprise Spreadsheet Intelligence*
+*SheetBrain AI — Enterprise Spreadsheet Intelligence*
 `;
   }, [activeSheet, safeWorkbook, activeScenario]);
 
@@ -1696,10 +1696,10 @@ export default function SheetBrainStudio() {
             <button
               onClick={() => fileInputRef.current?.click()}
               title="Import spreadsheet (CSV / XLSX)"
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition"
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition flex items-center gap-1 shrink-0"
             >
               <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-              <span className="hidden xl:inline ml-1">Import</span>
+              <span className="hidden sm:inline text-xs font-medium">Import</span>
             </button>
 
             {/* AWS S3 Auto-Save Button & Status Badge */}
@@ -1707,10 +1707,10 @@ export default function SheetBrainStudio() {
               onClick={handleCloudSave}
               disabled={isCloudSaving}
               title="Continuous background persistence to Amazon S3 (ap-southeast-2). Click to force save now."
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-medium select-none flex items-center gap-1 transition shrink-0"
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-medium select-none flex items-center gap-1.5 transition shrink-0"
             >
-              <Cloud className={`w-3.5 h-3.5 ${cloudSaveStatus === 'saving' ? 'animate-pulse text-amber-500' : 'text-emerald-500'}`} />
-              <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{cloudSaveStatus === 'saving' ? 'AWS Saving...' : 'AWS â˜ï¸ Saved'}</span>
+              <Cloud className={`w-3.5 h-3.5 shrink-0 ${cloudSaveStatus === 'saving' ? 'animate-pulse text-amber-500' : 'text-emerald-500'}`} />
+              <span className="hidden md:inline text-[11px] font-semibold tracking-tight whitespace-nowrap">{cloudSaveStatus === 'saving' ? 'Saving...' : 'AWS Saved'}</span>
             </button>
 
             {/* Share / Link Button */}
@@ -1740,8 +1740,8 @@ export default function SheetBrainStudio() {
         <AgentPipelineBar isCompiling={isCompiling} isSimulating={isSimulating} prompt={promptText} />
 
         {/* 2. View Mode Switcher Strip */}
-        <div className="h-10 bg-slate-100/90 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-4 flex items-center text-xs shrink-0 transition-colors">
-          <div className="flex items-center gap-1 w-full overflow-x-auto scrollbar-none">
+        <div className="h-10 bg-slate-100/90 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-4 flex items-center text-xs shrink-0 transition-colors justify-between gap-2">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0">
             <button
               onClick={() => setActiveView('grid')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg text-xs font-semibold transition ${
@@ -1803,12 +1803,14 @@ export default function SheetBrainStudio() {
             </button>
           </div>
 
-          <div className="hidden xl:flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="hidden xl:flex items-center gap-2.5 ml-auto shrink-0 text-[11px] text-slate-500 dark:text-slate-400 pl-4">
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-50 dark:bg-cyan-950/40 text-blue-700 dark:text-cyan-300 border border-blue-200 dark:border-cyan-800/40 font-mono text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-cyan-400" />
               Univer Office Engine
             </span>
-            <span className="font-mono tabular-nums">{activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} rows Â· {activeSheet?.columns?.length || 0} cols Â· Formula Auto-calc</span>
+            <span className="font-mono tabular-nums whitespace-nowrap">
+              {activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} rows &middot; {activeSheet?.columns?.length || 0} cols &middot; Formula Auto-calc
+            </span>
           </div>
         </div>
 
@@ -1838,6 +1840,7 @@ export default function SheetBrainStudio() {
 
             <div className={activeView === 'analytics' ? 'flex-1 flex flex-col min-h-0 overflow-hidden' : 'hidden'}>
               <VisualAnalyticsView
+                key={`${safeWorkbook?.id || 'wb'}_${activeSheet?.id || 'sheet'}_analytics`}
                 sheet={activeSheet}
                 chartConfig={safeWorkbook?.chartConfig || {
                   type: 'line',
