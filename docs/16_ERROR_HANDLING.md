@@ -15,9 +15,14 @@
 * **Input Sanitization**: Pre-flight validation rejects nonsense prompts, greetings, and OWASP formula injection prefixes (`=cmd|`, `@`, `+`, `-`).
 
 ## 3. AI Agent Error Handling
-* **Bedrock Timeout Trapping**: Cloud model calls to Bedrock (`anthropic.claude-3-5-sonnet`) feature a 5000ms timeout trap.
+* **Bedrock Timeout Trapping**: Every cloud model call to Amazon Bedrock (`anthropic.claude-3-5-sonnet-20240620-v1:0`, configurable via `BEDROCK_MODEL_ID`) is wrapped in a 5000ms `AbortSignal.timeout` trap. On timeout, quota exhaustion, or malformed response, the call resolves to a safe fallback rather than throwing.
 * **Autonomous Fallback Execution**: When network timeouts, quota limits, or credential errors occur, the orchestrator seamlessly routes execution to the local deterministic multi-agent synthesizer with zero UI interruption.
 
-## 4. Fallback Mechanisms (Neuro-Symbolic Hybrid Engine)
-* **HyperFormula Deterministic Safety Net**: In all operational modes, formula recalculation is delegated to the local HyperFormula v3.4.0 engine.
-* **CloudWatch EMF Alerting**: Every fallback event emits an Embedded Metric Format (EMF) log with `FallbackCount: 1`, providing instant observability in the AWS CloudWatch console.
+## 4. Formula Error Reporting
+* **Explicit Error Surface**: Formula failures are surfaced to the user as standard spreadsheet error literals (`#VALUE!`, `#REF!`, `#DIV/0!`) rendered directly in the affected cell rather than being silently coerced to zero. A wrong zero is more dangerous to a financial model than a visible error.
+* **Circular Reference Guard**: `isCircularReference()` in `src/lib/engine/formulaEngine.ts` tokenizes formulas and parses each referenced coordinate, rejecting genuine self-references while correctly permitting legitimate near-matches (e.g. `=SUM(B20:B29)` inside cell `B2`).
+
+## 5. Fallback Mechanisms (Neuro-Symbolic Hybrid Engine)
+* **HyperFormula Deterministic Safety Net**: In all operational modes, formula recalculation is delegated to the local HyperFormula v3.4.0 engine, which resolves multi-level dependency chains via topological sorting.
+* **CloudWatch EMF Alerting**: Every fallback event emits an Embedded Metric Format (EMF) log with `FallbackCount: 1`, providing instant observability in the AWS CloudWatch console under the `SheetBrainAI/Metrics` namespace.
+* **Real Telemetry**: `getLatencyPercentiles()` in `src/lib/aws/cloudwatch.ts` samples actual observed latencies, so `/api/observability` reports measured p50/p95/p99 values rather than static placeholders.

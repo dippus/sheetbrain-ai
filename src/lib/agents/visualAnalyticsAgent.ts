@@ -49,6 +49,9 @@ Return strict JSON:
       systemPrompt,
       userPrompt: `Dataset: "${title}". Columns: ${JSON.stringify(columns.map(c => ({ key: c.key, label: c.label, type: c.type })))}. Rows count: ${rawRows.length}. Sample compiled cells: ${JSON.stringify(Object.keys(compiledData.cellData).slice(0, 10))}`,
       maxTokens: 1000,
+      // Chart selection is a rule-based decision; the local synthesiser produces
+      // an equivalent config, so a slow model adds latency without adding value.
+      timeoutMs: 12000,
     });
 
     if (bedrockResult.data && bedrockResult.data.primarySeriesKey) {
@@ -93,11 +96,31 @@ Return strict JSON:
   }
 
   // Deterministic Fallback: Rule-Based Narrative Synthesizer
-  const primaryCol = numericCols[numericCols.length > 2 ? 1 : 0] || numericCols[0] || columns[1] || columns[0];
-  const secondaryCol = numericCols.length > 1 ? numericCols[numericCols.length - 1] : undefined;
+  const isAcademic = metadata?.domain?.includes('Education') || columns.some(c => /student|grade|marks|roll/i.test(c.label));
+  const isTimeSeries = metadata?.hasTimeDimension ?? (!isAcademic);
 
-  const isTimeSeries = metadata?.hasTimeDimension ?? true;
-  const chartType: 'line' | 'bar' | 'area' = isTimeSeries ? 'area' : 'bar';
+  let xAxisCol = columns[0];
+  let primaryCol = numericCols[0];
+  let secondaryCol: typeof numericCols[0] | undefined;
+  let chartType: 'line' | 'bar' | 'area' = isTimeSeries ? 'area' : 'bar';
+  let chartTitle = `${title} — Operational Trajectory`;
+  let insight = `Synthesized visual telemetry tracking performance across active horizons.`;
+
+  if (isAcademic) {
+    chartType = 'bar';
+    // X-Axis should be Student Name if present, else Roll No
+    xAxisCol = columns.find(c => /student|name/i.test(c.label)) || columns[1] || columns[0];
+    // Primary metric should be Total Marks or Percentage
+    primaryCol = numericCols.find(c => /total marks|aggregate|score/i.test(c.label)) ||
+                 numericCols.find(c => /percentage/i.test(c.label)) ||
+                 numericCols[0] || columns[2];
+    secondaryCol = numericCols.find(c => c.key !== primaryCol?.key && /dbms|web|software|python|math|science/i.test(c.label));
+    chartTitle = `${title} — Student Academic Performance`;
+    insight = `Academic marks distribution across student cohort demonstrating curriculum mastery and performance spread.`;
+  } else {
+    primaryCol = numericCols[numericCols.length > 2 ? 1 : 0] || numericCols[0] || columns[1] || columns[0];
+    secondaryCol = numericCols.length > 1 ? numericCols[numericCols.length - 1] : undefined;
+  }
 
   const series = [
     {
@@ -117,8 +140,8 @@ Return strict JSON:
 
   const chartConfig: ChartConfig = {
     type: chartType,
-    title: `${title} — Operational Trajectory`,
-    xAxisKey: columns[0]?.key || 'A',
+    title: chartTitle,
+    xAxisKey: xAxisCol?.key || 'A',
     series,
   };
 
@@ -126,7 +149,7 @@ Return strict JSON:
     output: {
       chartConfig,
       primaryMetricKey: primaryCol?.key || 'B',
-      narrativeInsight: `Synthesized ${chartType} visualization tracking ${primaryCol?.label} across active horizons.`,
+      narrativeInsight: insight,
     },
     isFallback: true,
     latencyMs: Date.now() - startTime,

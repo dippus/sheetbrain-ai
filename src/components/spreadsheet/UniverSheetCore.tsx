@@ -374,9 +374,8 @@ export default function UniverSheetCore({
 
         if (isNonMutation) return;
 
-        // Debounce cell change sync to prevent re-render thrashing during typing
-        // Use faster sync (150ms) for undo/redo to feel snappy
-        const isUndoRedo = cmdId.includes('undo') || cmdId.includes('redo');
+        // Fast sync (50ms) for cell edits / confirm / undo / redo to feel instantaneous
+        const isFastSync = cmdId.includes('undo') || cmdId.includes('redo') || cmdId.includes('set-range-values') || cmdId.includes('edit-visible') || cmdId.includes('set-cell-value');
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
@@ -384,7 +383,7 @@ export default function UniverSheetCore({
         debounceTimerRef.current = setTimeout(() => {
           if (destroyed) return;
           extractAndSyncSheet(fWorkbook);
-        }, isUndoRedo ? 80 : 200);
+        }, isFastSync ? 50 : 200);
       });
     } catch (err) {
       console.warn('Univer initialization fallback:', err);
@@ -394,11 +393,11 @@ export default function UniverSheetCore({
       destroyed = true;
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        // Flush pending edit before unmounting so tab switching never drops active user edits
+        if (localWorkbook) {
+          extractAndSyncSheet(localWorkbook);
+        }
       }
-      // NOTE: Do not sync localWorkbook back to React on unmount.
-      // During unmount, localWorkbook contains older canvas state which would overwrite
-      // incoming changes (such as Sort A-Z, Clear Cells, Template Selection, or AI Generation).
-      // Active user edits are already safely debounced and synced via onCommandExecuted.
       queueMicrotask(() => {
         if (localUniver) {
           try {

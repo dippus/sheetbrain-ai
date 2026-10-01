@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executeMultiAgentPipeline } from '@/lib/agents/orchestrator';
 import { logCloudWatchMetric } from '@/lib/aws/cloudwatch';
 
+/**
+ * SECURITY (REQ-NF-003): Maximum accepted prompt length.
+ * Bounds Bedrock token spend and blocks quota-burn / oversized-payload attacks.
+ */
+const MAX_PROMPT_LENGTH = 500;
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
@@ -18,6 +24,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         error: "Please enter a specific spreadsheet prompt (e.g. '12-Month SaaS Financial Runway', 'Employee Payroll Register', 'Hospital Patient Billing').",
+      }, { status: 400 });
+    }
+
+    // Reject oversized prompts before any model invocation occurs.
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      return NextResponse.json({
+        success: false,
+        error: `Prompt exceeds the ${MAX_PROMPT_LENGTH} character limit. Please shorten your description.`,
       }, { status: 400 });
     }
 

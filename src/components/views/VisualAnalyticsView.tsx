@@ -155,12 +155,21 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
     let overallPeak = -Infinity;
     let dataRowCount = 0;
 
+    const isSummaryRow = (rowIdx: number, rowLabel: string) => {
+      if (/total|summary|average|mean|aggregate|class average/i.test(rowLabel)) return true;
+      const aVal = String(cellMap[`A${rowIdx}`]?.v || '');
+      if (/total|summary|average|mean|aggregate|class average/i.test(aVal)) return true;
+      return false;
+    };
+
     for (let r = 2; r <= totalRows; r++) {
       const xCell = cellMap[`${xCol?.key || 'A'}${r}`];
       const rawX = xCell?.v;
       if (rawX === undefined || rawX === null || rawX === '') continue;
 
       const name = String(rawX);
+      if (isSummaryRow(r, name)) continue;
+
       const point: { name: string; [key: string]: number | string } = { name };
       let hasAnyNumeric = false;
 
@@ -200,7 +209,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
     let compositionData = sortedComp.slice(0, 5);
     if (sortedComp.length > 5) {
       const otherSum = sortedComp.slice(5).reduce((acc, curr) => acc + curr.value, 0);
-      compositionData.push({ name: 'Other Horizons', value: otherSum });
+      compositionData.push({ name: 'Other Observations', value: otherSum });
     }
 
     const meanVal = dataRowCount > 0 ? overallTotal / dataRowCount : 0;
@@ -213,6 +222,7 @@ export default function VisualAnalyticsView({ sheet, chartConfig }: VisualAnalyt
       let max = -Infinity;
 
       for (let r = 2; r <= totalRows; r++) {
+        if (isSummaryRow(r, '')) continue;
         const v = cellMap[`${col.key}${r}`]?.v;
         if (typeof v === 'number' && !isNaN(v)) {
           sum += v;

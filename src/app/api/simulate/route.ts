@@ -19,6 +19,12 @@ interface SimulationResponse {
   deltas: SimulationDelta[];
 }
 
+/**
+ * SECURITY (REQ-NF-003): Maximum accepted hypothesis length.
+ * Bounds Bedrock token spend and blocks quota-burn / oversized-payload attacks.
+ */
+const MAX_HYPOTHESIS_LENGTH = 500;
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
@@ -27,6 +33,13 @@ export async function POST(req: NextRequest) {
 
     if (!hypothesis && explicitMultiplier === undefined) {
       return NextResponse.json({ error: 'Hypothesis or multiplier is required' }, { status: 400 });
+    }
+
+    // Reject oversized hypotheses before any model invocation occurs.
+    if (typeof hypothesis === 'string' && hypothesis.length > MAX_HYPOTHESIS_LENGTH) {
+      return NextResponse.json({
+        error: `Hypothesis exceeds the ${MAX_HYPOTHESIS_LENGTH} character limit.`,
+      }, { status: 400 });
     }
 
     const columns: SheetColumn[] = sheet?.columns || [];
@@ -155,7 +168,7 @@ Return strict JSON:
       success: true,
       simulation: {
         scenario: hypothesis || `Adjust ${targetCol?.label || colKey} by ${deltaPercentStr}`,
-        summary: `Adjusted all ${deltas.length} horizon periods for ${targetCol?.label || `Column ${colKey}`} by ${deltaPercentStr} dynamically.`,
+        summary: `Adjusted all ${deltas.length} records for ${targetCol?.label || `Column ${colKey}`} by ${deltaPercentStr} dynamically.`,
         severity,
         targetColKey: colKey,
         multiplier: mult,

@@ -528,6 +528,12 @@ export default function SheetBrainStudio() {
         localStorage.setItem('sheetbrain_active_workbook', JSON.stringify(currentWorkbook));
         localStorage.setItem('sheetbrain_active_template_key', activeTemplateKey);
         localStorage.setItem('sheetbrain_active_sheet_id', activeSheetId);
+        if (activeTemplateKey) {
+          localStorage.setItem(`sheetbrain_wb_${activeTemplateKey}`, JSON.stringify(currentWorkbook));
+        }
+        if (currentWorkbook.id) {
+          localStorage.setItem(`sheetbrain_wb_${currentWorkbook.id}`, JSON.stringify(currentWorkbook));
+        }
         setSaveStatus('saved');
       } catch (err) {
         console.warn('Autosave to localStorage failed:', err);

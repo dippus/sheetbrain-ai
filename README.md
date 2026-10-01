@@ -49,31 +49,37 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 
 ```
   ┌────────────────────────────────────────────────────────────────────────┐
-  │                 User Prompt: "12-Month SaaS Financial Runway"          │
+  │                 User Prompt: "BCA Semester 5 Student Gradebook"        │
   └───────────────────────────────────┬────────────────────────────────────┘
                                       │
                                       ▼
   ┌────────────────────────────────────────────────────────────────────────┐
   │ 🏛️ AGENT 1: Schema Architect                                           │
-  │ Plans column structure, headers, data types (Currency, %), & seed rows │
+  │ Models domain taxonomy, column metadata, datatypes, & benchmark rows   │
   └───────────────────────────────────┬────────────────────────────────────┘
                                       │
                                       ▼
   ┌────────────────────────────────────────────────────────────────────────┐
   │ 🧮 AGENT 2: Formula Compiler                                           │
-  │ Injects standard Excel formulas (=SUM, =IF) & guards against #REF!     │
+  │ Synthesizes reactive Excel formulas (=SUM, =IF, =ROUND) & guards       │
   └───────────────────────────────────┬────────────────────────────────────┘
                                       │
                                       ▼
   ┌────────────────────────────────────────────────────────────────────────┐
   │ 📊 AGENT 3: Visual Analytics Engine                                    │
-  │ Auto-selects & binds dynamic charts (Bar / Line / Waterfall) to cells  │
+  │ Auto-selects & binds dynamic charts (Bar / Line / Area) to coordinates │
+  └───────────────────────────────────┬────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ ⚡ AGENT 4: Deterministic Math Engine (HyperFormula v3)                 │
+  │ Zero-hallucination DAG recalculation & mathematical dependency resolve │
   └───────────────────────────────────┬────────────────────────────────────┘
                                       │
                                       ▼
   ┌────────────────────────────────────────────────────────────────────────┐
   │ 🖥️ UNIVER SPREADSHEET CANVAS (Browser Client)                           │
-  │ Living, editable, reactive spreadsheet ready to use & export           │
+  │ Living, editable, reactive spreadsheet ready to use & export to Excel  │
   └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -87,7 +93,7 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 | **Spreadsheet Engine** | **Univer Office SDK** (`@univerjs/core`, `@univerjs/sheets`) | Canvas-based Excel-grade spreadsheet runtime |
 | **Styling & UI** | **Tailwind CSS + Lucide Icons** | Modern dark/light mode, sleek glassmorphism studio UI |
 | **Charts** | **Recharts + Univer Charts** | Responsive, dynamic business visualizations |
-| **Generative AI** | **Amazon Bedrock (Claude 3.5 Sonnet)** | Semantic reasoning, ontology mapping & multi-agent intent |
+| **Generative AI** | **Amazon Bedrock (Claude 3.5 Sonnet / DeepSeek)** | Semantic reasoning, ontology mapping & multi-agent intent |
 | **Formula Engine** | **HyperFormula v3.4.0 (Open-Source DAG Engine)** | Instant (<50ms) reactive dependency graph, IF(), VLOOKUP(), aggregations |
 | **Hosting & CI/CD** | **AWS Amplify** | Serverless hosting with global edge CDN |
 
@@ -98,7 +104,7 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 * **🚀 Startup Founders**: Build 12-month runway models, hiring plans, and cash burn projections in 3 seconds.
 * **📈 Sales & Growth Teams**: Track CAC & LTV cohorts, marketing ROAS, and commission calculators.
 * **💼 Financial Analysts**: Generate P&L forecasts, DCF valuation models, and sensitivity tables.
-* **📋 Product Managers**: Create sprint velocity trackers, capacity planners, and feature prioritization matrices.
+* **📋 Product Managers & Educators**: Create sprint velocity boards, student gradebooks, and inventory matrices.
 
 ---
 
@@ -109,7 +115,7 @@ For complete technical and architectural specifications, see:
 * [`docs/03_REQUIREMENTS.md`](./docs/03_REQUIREMENTS.md) — Full Requirements Specification
 * [`docs/06_ARCHITECTURE.md`](./docs/06_ARCHITECTURE.md) — System Architecture & AWS Integration
 * [`docs/07_DATA_MODEL.md`](./docs/07_DATA_MODEL.md) — Data Model & WorkbookJSON Schema
-* [`docs/21_TASKS.md`](./docs/21_TASKS.md) — Live Development Task Board
+* [`docs/18_TASKS.md`](./docs/18_TASKS.md) — Live Development Task Board
 * [`docs/22_AI_DEVELOPMENT_LOG.md`](./docs/22_AI_DEVELOPMENT_LOG.md) — AI Development Milestones Log
 
 ---

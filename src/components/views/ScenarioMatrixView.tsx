@@ -63,10 +63,14 @@ export default function ScenarioMatrixView({
   const cellMap = sheet?.cellData || {};
   const totalRows = Math.max(1, sheet?.rowCount || 1);
 
-  // 1. Identify rows that ACTUALLY contain data (skip empty blank rows)
+  // 1. Identify rows that ACTUALLY contain data (skip empty blank rows AND skip summary/total rows)
   const realRows = useMemo<number[]>(() => {
     const rowsWithData: number[] = [];
     for (let r = 2; r <= totalRows; r++) {
+      const aVal = String(cellMap[`A${r}`]?.v || '');
+      const isSummary = /total|summary|average|mean|aggregate|class average/i.test(aVal);
+      if (isSummary) continue;
+
       let rowHasContent = false;
       for (const col of safeColumns) {
         const cell = cellMap[`${col.key}${r}`];
@@ -103,11 +107,39 @@ export default function ScenarioMatrixView({
     });
   }, [safeColumns, cellMap, realRows]);
 
-  const [selectedColKey, setSelectedColKey] = useState<string>(numericColumns[0]?.key || 'B');
-  const [secondaryColKey, setSecondaryColKey] = useState<string>(numericColumns[1]?.key || numericColumns[0]?.key || 'C');
+  // Intelligently select the best driver column: prioritize operating drivers (Revenue, ARR, Sales, OpEx) over static cash balances
+  const preferredDriverCol = useMemo(() => {
+    return (
+      numericColumns.find(c => /rev|arr|mrr|sale|income|booking|growth|volume/i.test(c.label || '')) ||
+      numericColumns.find(c => /opex|cost|expense|burn|salary|wage/i.test(c.label || '')) ||
+      numericColumns[0]
+    );
+  }, [numericColumns]);
 
-  const primaryCol = numericColumns.find(c => c.key === selectedColKey) || numericColumns[0] || safeColumns[1];
-  const secondaryCol = numericColumns.find(c => c.key === secondaryColKey) || numericColumns[1] || numericColumns[0];
+  const [selectedColKey, setSelectedColKey] = useState<string>('');
+  const [secondaryColKey, setSecondaryColKey] = useState<string>('');
+
+  const activeColKey = selectedColKey && numericColumns.some(c => c.key === selectedColKey)
+    ? selectedColKey
+    : preferredDriverCol?.key || 'B';
+
+  const primaryCol = numericColumns.find(c => c.key === activeColKey) || preferredDriverCol || numericColumns[0] || safeColumns[1];
+
+  const secondaryDriverCol = useMemo(() => {
+    const remaining = numericColumns.filter(c => c.key !== primaryCol?.key);
+    return (
+      remaining.find(c => /opex|cost|expense|burn|salary/i.test(c.label || '')) ||
+      remaining.find(c => /rev|arr|mrr|sale|income/i.test(c.label || '')) ||
+      remaining[0] ||
+      primaryCol
+    );
+  }, [numericColumns, primaryCol]);
+
+  const activeSecondaryColKey = secondaryColKey && numericColumns.some(c => c.key === secondaryColKey)
+    ? secondaryColKey
+    : secondaryDriverCol?.key || 'C';
+
+  const secondaryCol = numericColumns.find(c => c.key === activeSecondaryColKey) || secondaryDriverCol || numericColumns[0];
 
   // 3. Baseline Statistics for Target Driver
   const baseMetrics = useMemo(() => {
@@ -194,12 +226,30 @@ export default function ScenarioMatrixView({
     }
     const polarity = detectMetricPolarity(primaryCol?.label || '');
     const colName = primaryCol?.label || 'Metric';
+    const isAcademic = /mark|score|percent|gpa|cgpa|grade|exam|result|attendance|point|credit|subject/i.test(colName);
+    if (isAcademic) {
+      return [
+        { label: '🎓 +10% Grade Curve', prompt: `Increase ${colName} by 10%`, mult: 1.10 },
+        { label: '📚 +5% Remedial Boost', prompt: `Increase ${colName} by 5%`, mult: 1.05 },
+        { label: '⚠️ -10% Tough Exam', prompt: `Decrease ${colName} by 10%`, mult: 0.90 },
+        { label: '📉 -20% Attendance Drop', prompt: `Decrease ${colName} by 20%`, mult: 0.80 },
+      ];
+    }
     if (polarity === 'negative') {
       return [
         { label: '✂️ -15% Lean Cut', prompt: `Decrease ${colName} by 15%`, mult: 0.85 },
         { label: '🛡️ -5% Budget Trim', prompt: `Decrease ${colName} by 5%`, mult: 0.95 },
         { label: '⚠️ +10% Creep', prompt: `Increase ${colName} by 10%`, mult: 1.10 },
         { label: '⚡ +25% Cost Surge', prompt: `Increase ${colName} by 25%`, mult: 1.25 },
+      ];
+    }
+    const isCash = /cash|balance|liquidity|runway|treasury|reserve/i.test(colName);
+    if (isCash) {
+      return [
+        { label: '🚀 +20% Capital Round', prompt: `Increase ${colName} by 20%`, mult: 1.20 },
+        { label: '🛡️ +8% Reserve Buffer', prompt: `Increase ${colName} by 8%`, mult: 1.08 },
+        { label: '📉 -15% Cash Drawdown', prompt: `Decrease ${colName} by 15%`, mult: 0.85 },
+        { label: '⚡ -30% Runway Shock', prompt: `Decrease ${colName} by 30%`, mult: 0.70 },
       ];
     }
     return [
@@ -418,7 +468,7 @@ export default function ScenarioMatrixView({
               <select
                 id="matrix-primary-driver"
                 name="primaryDriver"
-                value={selectedColKey}
+                value={activeColKey}
                 onChange={(e) => setSelectedColKey(e.target.value)}
                 className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-cyan-500 cursor-pointer transition-colors shadow-sm"
               >
@@ -436,7 +486,7 @@ export default function ScenarioMatrixView({
                 <select
                   id="matrix-secondary-driver"
                   name="secondaryDriver"
-                  value={secondaryColKey}
+                  value={activeSecondaryColKey}
                   onChange={(e) => setSecondaryColKey(e.target.value)}
                   className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-300 font-mono font-semibold focus:outline-none focus:border-cyan-500 cursor-pointer transition-colors shadow-sm"
                 >

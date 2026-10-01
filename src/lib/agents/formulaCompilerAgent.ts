@@ -1,4 +1,5 @@
 import { invokeBedrockAgent } from '@/lib/aws/bedrock';
+import { isCircularReference } from '@/lib/engine/formulaEngine';
 import { SheetCell, SheetColumn } from '@/types/sheet';
 import { SchemaArchitectOutput, FormulaCompilerOutput } from './types';
 
@@ -42,7 +43,10 @@ STRICT RULES:
     const bedrockResult = await invokeBedrockAgent<BedrockFormulaPayload>({
       systemPrompt,
       userPrompt: `Columns: ${JSON.stringify(columns.map(c => ({ key: c.key, label: c.label, type: c.type })))}. Data rows: 2 to ${lastDataRow}. Sample row: ${JSON.stringify(rawRows[0])}`,
-      maxTokens: 1200,
+      maxTokens: 900,
+      // Formula synthesis is deterministic by nature and the local AST compiler
+      // is authoritative, so a slow model response is not worth blocking on.
+      timeoutMs: 12000,
     });
 
     if (bedrockResult.data && bedrockResult.data.formulaMap && Object.keys(bedrockResult.data.formulaMap).length > 0) {
@@ -96,7 +100,9 @@ function buildCellDataWithFormulas(
     columns.forEach(c => {
       const coord = `${c.key}${r}`;
       const formula = aiFormulas[coord];
-      if (formula && formula.startsWith('=') && !formula.toUpperCase().includes(coord)) {
+      // ANTI-CIRCULAR GUARD (REQ-NF-002): uses coordinate parsing rather than
+      // substring matching, so "=SUM(B20:B29)" is correctly accepted in B2.
+      if (formula && formula.startsWith('=') && !isCircularReference(formula, coord)) {
         cellData[coord] = {
           f: formula,
           align: c.type === 'string' ? 'left' : 'right',
@@ -120,7 +126,7 @@ function buildCellDataWithFormulas(
   columns.slice(1).forEach(c => {
     const coord = `${c.key}${summaryRow}`;
     const customFormula = aiFormulas[coord];
-    if (customFormula && customFormula.startsWith('=') && !customFormula.toUpperCase().includes(coord)) {
+    if (customFormula && customFormula.startsWith('=') && !isCircularReference(customFormula, coord)) {
       cellData[coord] = { f: customFormula, bold: true, align: 'right' };
     } else if (c.type === 'percentage') {
       cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
@@ -149,9 +155,13 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
   });
 
   // Domain-specific formula rules
+  const isAcademic = metadata?.domain?.includes('Education') || columns.some(c => /student|grade|marks|roll/i.test(c.label));
   const isSaaS = metadata?.domain === 'SaaS Finance';
   const isHR = metadata?.domain === 'HR & Payroll';
   const isHealth = metadata?.domain === 'Healthcare';
+  const isEcommerce = metadata?.domain?.includes('Sales') || columns.some(c => /order|units sold/i.test(c.label));
+  const isProject = metadata?.domain?.includes('Project') || columns.some(c => /sprint|story point|task key/i.test(c.label));
+  const isInventory = metadata?.domain?.includes('Inventory') || columns.some(c => /sku|reorder/i.test(c.label));
 
   // Data Rows (Row 2 .. lastDataRow)
   rawRows.forEach((row, idx) => {
@@ -160,50 +170,102 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
     columns.forEach(c => {
       const coord = `${c.key}${r}`;
 
-      // SaaS Continuous Balance Cascade
+      // 1. Academic / Student Gradebook Formulas
+      if (isAcademic) {
+        if (c.key === 'G') {
+          // Total Marks = SUM(C..F)
+          cellData[coord] = { f: `=SUM(C${r}:F${r})`, align: 'right' };
+          formulaCount++;
+          return;
+        }
+        if (c.key === 'H') {
+          // Percentage = G / 400
+          cellData[coord] = { f: `=ROUND(G${r}/400,3)`, align: 'right' };
+          formulaCount++;
+          return;
+        }
+        if (c.key === 'I') {
+          // Final Grade
+          cellData[coord] = { f: `=IF(H${r}>=0.85,"A+",IF(H${r}>=0.7,"A",IF(H${r}>=0.55,"B","C")))`, align: 'center' };
+          formulaCount++;
+          return;
+        }
+        if (c.key === 'J') {
+          // Academic Status
+          cellData[coord] = { f: `=IF(H${r}>=0.5,"Pass","Remedial")`, align: 'center' };
+          formulaCount++;
+          return;
+        }
+      }
+
+      // 2. SaaS Continuous Balance Cascade
       if (isSaaS) {
         if (c.key === 'B' && r > 2) {
-          // Starting cash = previous month ending cash
           cellData[coord] = { f: `=F${r - 1}`, align: 'right' };
           formulaCount++;
           return;
         }
         if (c.key === 'E') {
-          // Net Monthly Burn = OPEX (D) - ARR/MRR (C)
           cellData[coord] = { f: `=(D${r}-C${r})`, align: 'right' };
           formulaCount++;
           return;
         }
         if (c.key === 'F') {
-          // Ending Cash Balance = Starting Cash (B) - Net Burn (E)
           cellData[coord] = { f: `=(B${r}-E${r})`, align: 'right' };
           formulaCount++;
           return;
         }
         if (c.key === 'G') {
-          // Runway Months = Ending Cash / OPEX
           cellData[coord] = { f: `=ROUND(F${r}/D${r},1)`, align: 'right' };
           formulaCount++;
           return;
         }
       }
 
-      // HR Net Pay Formula
+      // 3. HR Net Pay Formula
       if (isHR && c.key === 'F') {
         cellData[coord] = { f: `=(C${r}+D${r}-E${r})`, align: 'right' };
         formulaCount++;
         return;
       }
 
-      // Healthcare Copay Formula
+      // 4. Healthcare Copay Formula
       if (isHealth && c.key === 'E') {
         cellData[coord] = { f: `=(C${r}-D${r})`, align: 'right' };
         formulaCount++;
         return;
       }
 
-      // General Model Margin / Variance Formula
-      if (!isSaaS && !isHR && !isHealth) {
+      // 5. E-Commerce Net Revenue Formula
+      if (isEcommerce) {
+        if (c.key === 'F') {
+          cellData[coord] = { f: `=(D${r}*E${r})`, align: 'right' };
+          formulaCount++;
+          return;
+        }
+        if (c.key === 'H') {
+          cellData[coord] = { f: `=(F${r}-G${r})`, align: 'right' };
+          formulaCount++;
+          return;
+        }
+      }
+
+      // 6. Project Management Variance
+      if (isProject && c.key === 'G') {
+        cellData[coord] = { f: `=(F${r}-E${r})`, align: 'right' };
+        formulaCount++;
+        return;
+      }
+
+      // 7. Inventory Valuation
+      if (isInventory && c.key === 'F') {
+        cellData[coord] = { f: `=(D${r}*E${r})`, align: 'right' };
+        formulaCount++;
+        return;
+      }
+
+      // 8. General Operational Variance / Efficiency Formula
+      if (!isAcademic && !isSaaS && !isHR && !isHealth && !isEcommerce && !isProject && !isInventory) {
         if (c.key === 'D' && columns.some(col => col.key === 'B')) {
           cellData[coord] = { f: `=(B${r}-C${r})`, align: 'right' };
           formulaCount++;
@@ -226,14 +288,19 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
 
   // Summary Row (Row summaryRow)
   cellData[`A${summaryRow}`] = {
-    v: 'TOTAL / MODEL SUMMARY',
+    v: isAcademic ? 'CLASS AVERAGE' : 'TOTAL / MODEL SUMMARY',
     bold: true,
     align: 'left',
   };
 
   columns.slice(1).forEach(c => {
     const coord = `${c.key}${summaryRow}`;
-    if (c.type === 'percentage') {
+    if (isAcademic) {
+      if (c.type === 'percentage' || c.type === 'number') {
+        cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
+        formulaCount++;
+      }
+    } else if (c.type === 'percentage') {
       cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
       formulaCount++;
     } else if (c.type === 'number' || c.type === 'currency') {

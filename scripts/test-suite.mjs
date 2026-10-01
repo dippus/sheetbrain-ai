@@ -201,6 +201,92 @@ runTest('Formula Injection Defense (OWASP Prefix Sanitization)', () => {
   });
 });
 
+runTest('Circular Reference 2D Bounding-Box Range & Coordinate Defense', () => {
+  function parseCoord(coord) {
+    const match = coord.trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
+    if (!match) return null;
+    return { col: match[1], row: parseInt(match[2], 10) };
+  }
+
+  function colToIndex(col) {
+    let index = 0;
+    for (let i = 0; i < col.length; i++) {
+      index = index * 26 + (col.charCodeAt(i) - 64);
+    }
+    return index - 1;
+  }
+
+  function isCircularReference(formula, targetCoord) {
+    const target = parseCoord(targetCoord);
+    if (!target) return false;
+    const targetColIdx = colToIndex(target.col);
+    const targetRow = target.row;
+    const upperFormula = formula.toUpperCase();
+
+    const rangePattern = /\$?([A-Z]{1,3})\$?([0-9]{1,7})\s*:\s*\$?([A-Z]{1,3})\$?([0-9]{1,7})/g;
+    let match;
+    while ((match = rangePattern.exec(upperFormula)) !== null) {
+      const startColIdx = colToIndex(match[1]);
+      const startRow = Number(match[2]);
+      const endColIdx = colToIndex(match[3]);
+      const endRow = Number(match[4]);
+
+      const minCol = Math.min(startColIdx, endColIdx);
+      const maxCol = Math.max(startColIdx, endColIdx);
+      const minRow = Math.min(startRow, endRow);
+      const maxRow = Math.max(startRow, endRow);
+
+      if (targetColIdx >= minCol && targetColIdx <= maxCol && targetRow >= minRow && targetRow <= maxRow) {
+        return true;
+      }
+    }
+
+    const singleRefPattern = /\$?([A-Z]{1,3})\$?([0-9]{1,7})/g;
+    while ((match = singleRefPattern.exec(upperFormula)) !== null) {
+      if (match[1] === target.col && Number(match[2]) === targetRow) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Range containment checks
+  assert.strictEqual(isCircularReference('=SUM(B2:B9)', 'B5'), true, 'B5 inside B2:B9 must be circular');
+  assert.strictEqual(isCircularReference('=SUM(B2:B9)', 'B2'), true, 'B2 start endpoint must be circular');
+  assert.strictEqual(isCircularReference('=SUM(B2:B9)', 'B9'), true, 'B9 end endpoint must be circular');
+  assert.strictEqual(isCircularReference('=SUM(B20:B29)', 'B2'), false, 'B2 outside B20:B29 must not be circular');
+  assert.strictEqual(isCircularReference('=SUM(A1:C5)', 'B3'), true, 'B3 inside 2D box A1:C5 must be circular');
+  assert.strictEqual(isCircularReference('=SUM(A1:C5)', 'D6'), false, 'D6 outside A1:C5 must not be circular');
+  assert.strictEqual(isCircularReference('=A1+10', 'A1'), true, 'Direct self reference must be circular');
+  assert.strictEqual(isCircularReference('=$A$1*2', 'A1'), true, 'Absolute $A$1 reference must be circular');
+});
+
+runTest('Path Traversal & Safe Filename Validation Defense (REQ-NF-003)', () => {
+  function isSafeFileName(fileName) {
+    if (fileName.length === 0 || fileName.length > 255) return false;
+    if (fileName.includes('\0')) return false;
+    if (fileName.includes('..')) return false;
+    if (fileName.includes('/') || fileName.includes('\\')) return false;
+    if (fileName.startsWith('/') || /^[A-Za-z]:\\/.test(fileName)) return false;
+    return /^[A-Za-z0-9._-]+$/.test(fileName);
+  }
+
+  // Traversal attack payloads MUST be blocked
+  assert.strictEqual(isSafeFileName('../../../../etc/passwd'), false);
+  assert.strictEqual(isSafeFileName('..\\windows\\win.ini'), false);
+  assert.strictEqual(isSafeFileName('/etc/shadow'), false);
+  assert.strictEqual(isSafeFileName('C:\\secret.env'), false);
+  assert.strictEqual(isSafeFileName('data/file.csv'), false);
+  assert.strictEqual(isSafeFileName('payload.csv\0.png'), false);
+  assert.strictEqual(isSafeFileName(''), false);
+
+  // Legitimate filenames MUST be accepted
+  assert.strictEqual(isSafeFileName('General-Ledger.xlsx'), true);
+  assert.strictEqual(isSafeFileName('financial_model_v1.csv'), true);
+  assert.strictEqual(isSafeFileName('data-2026.xls'), true);
+});
+
 // ---------------------------------------------------------
 // SUITE 5: AWS CloudWatch EMF & Persistence Telemetry
 // ---------------------------------------------------------

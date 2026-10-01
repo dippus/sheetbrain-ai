@@ -13,6 +13,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const fileName = searchParams.get('file');
 
+    // SECURITY (REQ-NF-003): Reject any attempt to escape the sandboxed data directory.
+    // Prevents path traversal via directory separators, parent-directory
+    // references, absolute paths, and null-byte injection.
+    if (fileName !== null && !isSafeFileName(fileName)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid file name. Only simple file names are permitted.' },
+        { status: 400 }
+      );
+    }
+
     const dataDir = path.join(process.cwd(), 'public', 'data');
     const fallbackDataDir = path.join(process.cwd(), 'data');
     const activeDir = fs.existsSync(dataDir) ? dataDir : fallbackDataDir;
@@ -36,7 +46,10 @@ export async function GET(request: NextRequest) {
               const content = fs.readFileSync(fullPath, 'utf8');
               const lines = content.split('\n').filter(l => l.trim().length > 0);
               rowCount = Math.max(0, lines.length - 1);
-            } catch (e) {}
+            } catch (e) {
+              console.warn(`[local-data] Could not count CSV rows for "${f}":`, e);
+              rowCount = 0;
+            }
           } else {
             try {
               const buffer = fs.readFileSync(fullPath);
@@ -44,7 +57,10 @@ export async function GET(request: NextRequest) {
               const ws = wb.Sheets[wb.SheetNames[0]];
               const range = ws?.['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : null;
               rowCount = range ? range.e.r : 0;
-            } catch (e) {}
+            } catch (e) {
+              console.warn(`[local-data] Could not count XLSX rows for "${f}":`, e);
+              rowCount = 0;
+            }
           }
 
           return {
@@ -66,12 +82,26 @@ export async function GET(request: NextRequest) {
     const isCsv = fileName.endsWith('.csv');
     const targetFile = (isXlsx || isCsv) ? fileName : `${fileName}.csv`;
 
-    let fullPath = path.join(activeDir, targetFile);
-    if (!fs.existsSync(fullPath)) {
-      fullPath = path.join(fallbackDataDir, targetFile);
+    // Defence in depth: re-validate the derived filename before any filesystem access.
+    if (!isSafeFileName(targetFile)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid file name. Only simple file names are permitted.' },
+        { status: 400 }
+      );
     }
 
-    if (!fs.existsSync(fullPath)) {
+    // Defence in depth: resolve the candidate path and confirm it still resides
+    // inside an allowed directory. Guards against traversal even if a future
+    // refactor reintroduces an unsanitized value upstream.
+    let fullPath = safeResolveWithin(activeDir, targetFile);
+    if (fullPath === null || !fs.existsSync(fullPath)) {
+      const altPath = safeResolveWithin(fallbackDataDir, targetFile);
+      if (altPath !== null && fs.existsSync(altPath)) {
+        fullPath = altPath;
+      }
+    }
+
+    if (fullPath === null || !fs.existsSync(fullPath)) {
       return NextResponse.json(
         { success: false, error: `File ${targetFile} not found in local data folder` },
         { status: 404 }
@@ -105,4 +135,31 @@ export async function GET(request: NextRequest) {
     console.error('Local data read error:', message);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
+}
+
+/**
+ * SECURITY (REQ-NF-003): Whitelist-based filename validator.
+ * Allows only plain filenames made of letters, digits, dots, dashes and
+ * underscores. Explicitly denies directory separators, parent-directory
+ * traversal sequences, absolute paths, and null bytes.
+ */
+function isSafeFileName(fileName: string): boolean {
+  if (fileName.length === 0 || fileName.length > 255) return false;
+  if (fileName.includes('\0')) return false;
+  if (fileName.includes('..')) return false;
+  if (fileName.includes('/') || fileName.includes('\\')) return false;
+  if (path.isAbsolute(fileName)) return false;
+  return /^[A-Za-z0-9._-]+$/.test(fileName);
+}
+
+/**
+ * SECURITY (REQ-NF-003): Resolves `fileName` against `baseDir` and returns the
+ * absolute path only when the result stays inside `baseDir`. Returns null otherwise.
+ */
+function safeResolveWithin(baseDir: string, fileName: string): string | null {
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedTarget = path.resolve(resolvedBase, fileName);
+  const relative = path.relative(resolvedBase, resolvedTarget);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return resolvedTarget;
 }

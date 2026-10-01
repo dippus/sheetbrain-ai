@@ -3,6 +3,14 @@ import { BedrockRuntimeClient, BedrockRuntimeClientConfig, InvokeModelCommand } 
 const region = process.env.BEDROCK_REGION || 'ap-southeast-2';
 const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20240620-v1:0';
 
+/**
+ * PERF (REQ-NF-001): Foundation-model calls for the schema stage legitimately take
+ * 20-40 seconds. The previous 5s ceiling aborted every invocation before the model
+ * could reply, which silently forced all four agents into the deterministic
+ * fallback. The budget is now generous by default and overridable per environment.
+ */
+const REQUEST_TIMEOUT_MS = Number(process.env.BEDROCK_TIMEOUT_MS) || 90000;
+
 // Initialize Bedrock client. Reads explicit credentials or IAM role automatically.
 export function getBedrockClient(): BedrockRuntimeClient | null {
   try {
@@ -25,6 +33,12 @@ export interface BedrockAgentInvokeOptions {
   systemPrompt: string;
   userPrompt: string;
   maxTokens?: number;
+  /**
+   * Per-call latency budget. The shared endpoint's response time varies widely
+   * (3s-60s observed), so each pipeline stage declares how long it is willing to
+   * wait before the deterministic engine takes over. Defaults to the global budget.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -35,8 +49,10 @@ export async function invokeBedrockAgent<T>({
   systemPrompt,
   userPrompt,
   maxTokens = 2000,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 }: BedrockAgentInvokeOptions): Promise<{ data: T | null; error?: string; latencyMs: number }> {
   const startTime = Date.now();
+  const budget = Math.max(1000, timeoutMs);
 
   // Check for credentials: API key, Open-Source endpoints, or AWS IAM credentials
   const apiKey = process.env.AWS_BEARER_TOKEN_BEDROCK || process.env.AWS_BEDROCK_API_KEY;
@@ -105,7 +121,7 @@ export async function invokeBedrockAgent<T>({
           temperature: 0.1,
           response_format: { type: 'json_object' },
         }),
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(budget),
       });
 
       if (groqRes.ok) {
@@ -128,7 +144,7 @@ export async function invokeBedrockAgent<T>({
           max_tokens: maxTokens,
           temperature: 0.1,
         }),
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(budget),
       });
 
       if (orRes.ok) {
@@ -148,7 +164,7 @@ export async function invokeBedrockAgent<T>({
           max_tokens: maxTokens,
           temperature: 0.1,
         }),
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(budget),
       });
 
       if (olRes.ok) {
@@ -179,7 +195,7 @@ export async function invokeBedrockAgent<T>({
             'Accept': 'application/json',
           },
           body: JSON.stringify(mantlePayload),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(budget),
         });
 
         if (res.ok) {
@@ -199,7 +215,7 @@ export async function invokeBedrockAgent<T>({
             'Accept': 'application/json',
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(budget),
         });
 
         if (res.ok) {
@@ -250,12 +266,88 @@ export async function invokeBedrockAgent<T>({
       return { data: null, error: 'No JSON object found in Bedrock response', latencyMs };
     }
 
-    const parsedData = JSON.parse(jsonMatch[0]) as T;
+    const parsedData = parseJsonPayload<T>(jsonMatch[0]);
+    if (parsedData === null) {
+      return { data: null, error: 'Bedrock response was not valid JSON', latencyMs };
+    }
     return { data: parsedData, latencyMs };
   } catch (err: unknown) {
     const latencyMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Bedrock invocation failed';
     console.warn('[Bedrock] Invocation notice (safe fallback active):', errorMsg);
     return { data: null, error: errorMsg, latencyMs };
+  }
+}
+
+/**
+ * Parses a model response into T, tolerating two common real-world defects:
+ * 1. Markdown code fences (```json ... ```) already handled by the caller.
+ * 2. Truncated output when the generation hits the max_tokens ceiling. The tail
+ *    of the payload is simply missing, so we drop the incomplete trailing
+ *    fragment and close the open brackets to recover the completed prefix.
+ * Returns null when nothing usable can be recovered.
+ */
+function parseJsonPayload<T>(raw: string): T | null {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    // Fall through to truncation repair.
+  }
+
+  // Truncation repair: walk backwards to the last position that closes a complete
+  // value, then balance the brackets that remain open.
+  const withoutFence = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  let lastCompleteValue = -1;
+
+  for (let i = 0; i < withoutFence.length; i++) {
+    const ch = withoutFence[i];
+
+    if (inString) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === '"') { inString = false; lastCompleteValue = i; }
+      continue;
+    }
+
+    if (ch === '"') { inString = true; continue; }
+
+    if (ch === '{' || ch === '[') { stack.push(ch); continue; }
+
+    if (ch === '}' || ch === ']') {
+      stack.pop();
+      if (stack.length === 0) lastCompleteValue = i;
+      continue;
+    }
+  }
+
+  if (lastCompleteValue === -1) return null;
+
+  // Cut back to the last complete value and drop any dangling comma.
+  let repaired = withoutFence.slice(0, lastCompleteValue + 1).replace(/,\s*$/, '');
+
+  // Re-close every container still open at the cut point.
+  const opens: string[] = [];
+  let inStr = false;
+  let esc = false;
+  for (const ch of repaired) {
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (ch === '\\') { esc = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') opens.push('}');
+    else if (ch === '[') opens.push(']');
+  }
+  repaired += opens.reverse().join('');
+
+  try {
+    return JSON.parse(repaired) as T;
+  } catch {
+    return null;
   }
 }

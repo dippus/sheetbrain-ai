@@ -159,6 +159,116 @@ export function generateContextualScenarios(
     ];
   }
 
+  // Cash / Liquidity / Capital Polarity: Capital infusions vs Cash Drawdown
+  const isCashMetric = /cash|balance|liquidity|runway|treasury|reserve/i.test(colName);
+  if (isCashMetric) {
+    return [
+      {
+        key: 'capital_inflow',
+        name: '🚀 Capital Inflow (+20%)',
+        multiplier: 1.20,
+        deltaStr: '+20%',
+        prompt: `Simulate cash injection: increase ${colName} by 20%`,
+        simSum: Math.round(baseValue * 1.20),
+        deltaVal: Math.round(baseValue * 0.20),
+        type: 'growth',
+        desc: 'New financing tranche, venture debt extension & equity capital injection',
+        isPositiveOutcome: true,
+      },
+      {
+        key: 'treasury_buffer',
+        name: '🛡️ Working Capital Buffer (+8%)',
+        multiplier: 1.08,
+        deltaStr: '+8%',
+        prompt: `Simulate liquidity buffer: increase ${colName} by 8%`,
+        simSum: Math.round(baseValue * 1.08),
+        deltaVal: Math.round(baseValue * 0.08),
+        type: 'steady',
+        desc: 'Conservative treasury yield and disciplined cash reserve retention',
+        isPositiveOutcome: true,
+      },
+      {
+        key: 'cash_drawdown',
+        name: '📉 Liquidity Drawdown (-15%)',
+        multiplier: 0.85,
+        deltaStr: '-15%',
+        prompt: `Simulate cash compression: decrease ${colName} by 15%`,
+        simSum: Math.round(baseValue * 0.85),
+        deltaVal: Math.round(baseValue * -0.15),
+        type: 'risk',
+        desc: 'Accelerated working capital burn and delayed customer receivables',
+        isPositiveOutcome: false,
+      },
+      {
+        key: 'runway_shock',
+        name: '⚡ Severe Runway Shock (-30%)',
+        multiplier: 0.70,
+        deltaStr: '-30%',
+        prompt: `Simulate liquidity stress test: decrease ${colName} by 30%`,
+        simSum: Math.round(baseValue * 0.70),
+        deltaVal: Math.round(baseValue * -0.30),
+        type: 'crisis',
+        desc: 'Critical cash depletion testing emergency solvency and bridge viability',
+        isPositiveOutcome: false,
+      },
+    ];
+  }
+
+  // Academic & Student Performance Polarity (Marks, Percentage, Exam Score, GPA, Attendance)
+  const isAcademicMetric = /mark|score|percent|gpa|cgpa|grade|exam|result|attendance|point|credit|subject/i.test(colName);
+  if (isAcademicMetric) {
+    return [
+      {
+        key: 'curriculum_mastery',
+        name: '🎓 Curricular Mastery (+10%)',
+        multiplier: 1.10,
+        deltaStr: '+10%',
+        prompt: `Simulate academic mastery: increase ${colName} by 10%`,
+        simSum: Math.round(baseValue * 1.10),
+        deltaVal: Math.round(baseValue * 0.10),
+        type: 'growth',
+        desc: 'Advanced lab coaching, curriculum mastery & upward grading curve calibration',
+        isPositiveOutcome: true,
+      },
+      {
+        key: 'remedial_support',
+        name: '📚 Remedial Study Boost (+5%)',
+        multiplier: 1.05,
+        deltaStr: '+5%',
+        prompt: `Simulate targeted tutoring: increase ${colName} by 5%`,
+        simSum: Math.round(baseValue * 1.05),
+        deltaVal: Math.round(baseValue * 0.05),
+        type: 'steady',
+        desc: 'Targeted peer tutoring & foundational subject reinforcement across cohort',
+        isPositiveOutcome: true,
+      },
+      {
+        key: 'exam_difficulty',
+        name: '⚠️ Exam Difficulty Spike (-10%)',
+        multiplier: 0.90,
+        deltaStr: '-10%',
+        prompt: `Simulate difficult examination: decrease ${colName} by 10%`,
+        simSum: Math.round(baseValue * 0.90),
+        deltaVal: Math.round(baseValue * -0.10),
+        type: 'risk',
+        desc: 'Challenging university exam evaluation and stringent grading thresholds',
+        isPositiveOutcome: false,
+      },
+      {
+        key: 'attendance_attrition',
+        name: '📉 Attendance Dip Shock (-20%)',
+        multiplier: 0.80,
+        deltaStr: '-20%',
+        prompt: `Simulate student attendance drop: decrease ${colName} by 20%`,
+        simSum: Math.round(baseValue * 0.80),
+        deltaVal: Math.round(baseValue * -0.20),
+        type: 'crisis',
+        desc: 'Attendance drop, missed assignment deadlines & midterm completion lag',
+        isPositiveOutcome: false,
+      },
+    ];
+  }
+
   // Default / Positive Polarity: Revenue, Sales, Retention, Profit (HIGHER is better)
   return [
     {

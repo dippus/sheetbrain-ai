@@ -1,12 +1,20 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
+/**
+ * Canonical public URL for Open Graph / Twitter card resolution.
+ * Falls back to the deployed origin so shared links always resolve correctly.
+ */
+const canonicalUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.AWS_BRANCH ? `https://${process.env.AWS_BRANCH}.${process.env.AWS_APP_ID}.amplifyapp.com` : 'https://main.d36a9s34xgy54i.amplifyapp.com');
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://sheetbrain.ai"),
+  metadataBase: new URL(canonicalUrl),
   openGraph: {
     title: "SheetBrain AI Workspace",
     description: "Autonomous multi-agent spreadsheet intelligence workspace.",
-    url: "https://sheetbrain.ai",
+    url: canonicalUrl,
     siteName: "SheetBrain AI",
     type: "website",
   },

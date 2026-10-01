@@ -169,3 +169,51 @@
   * **Automated QA Verification**: Added Suite 6 in [`test-suite.mjs`](../scripts/test-suite.mjs) verifying the 4-agent sequential pipeline topology contracts.
   * **Verification**: `npx tsc --noEmit` → 0 errors. `npm run test:all` → 12/12 tests passed (100% success). `npm run build` → Production build clean (exit code 0).
 
+---
+
+## Milestone 8: Senior QA Security & Correctness Audit Remediation (2026-10-01)
+
+> **Traceability**: Hardens `REQ-NF-001` (Performance), `REQ-NF-002` (Formula Safety), `REQ-NF-003` (Security), `REQ-NF-007` (Observability).
+> **Driver**: Full-application senior QA audit conducted after Ship Gate deployment.
+
+### Security Remediation (REQ-NF-003)
+  * **Path Traversal Fixed**: [`local-data/route.ts`](../src/app/api/local-data/route.ts) previously passed the unvalidated `file` query parameter directly into `path.join()`, permitting directory-escape reads on the deployed Lambda filesystem. Added `isSafeFileName()` (whitelist regex rejecting `..`, path separators, absolute paths, and null bytes) and `safeResolveWithin()` (resolved-path containment assertion), applied both at the input boundary and again immediately before any filesystem access.
+  * **Metadata Leakage Closed**: [`health/route.ts`](../src/app/api/health/route.ts) no longer discloses Bedrock credential configuration state. [`observability/route.ts`](../src/app/api/observability/route.ts) no longer returns the S3 bucket name or authentication status; both fields are now explicitly redacted.
+  * **Input Bounding Implemented**: `MAX_PROMPT_LENGTH` (500 chars) in [`generate/route.ts`](../src/app/api/generate/route.ts) and `MAX_HYPOTHESIS_LENGTH` (500 chars) in [`simulate/route.ts`](../src/app/api/simulate/route.ts) now reject oversized payloads *before* any model invocation, bounding Bedrock token spend and quota-burn risk.
+
+### Correctness Remediation (REQ-NF-002)
+  * **Circular Reference Guard Rewritten**: The previous `formula.includes(coord)` substring test was unsound in both directions — it produced false positives (`=SUM(B20:B29)` inside cell `B2`) and false negatives (`=$B$2`, `=B$2+1` absolute self-references). Introduced `isCircularReference()` in [`formulaEngine.ts`](../src/lib/engine/formulaEngine.ts), which tokenizes the expression and parses each referenced coordinate before comparison.
+  * **Agent Guard Upgraded**: [`formulaCompilerAgent.ts`](../src/lib/agents/formulaCompilerAgent.ts) now delegates to `isCircularReference()` instead of duplicating the flawed substring logic, so the ANTI-CIRCULAR GUARD in the multi-agent pipeline is enforced by correct coordinate parsing.
+
+### Performance Remediation (REQ-NF-001)
+  * **O(n^2) Bottleneck Removed**: [`evaluateFormula()`](../src/lib/engine/formulaEngine.ts) previously constructed an entire HyperFormula workbook instance per single-cell evaluation, making every canvas cell edit quadratic across the grid. It now performs one batch recalculation via the existing DAG-correct `recalculateWorkbook()` and reads the target cell back from that single pass, reducing a full recalculation to O(n) with one engine instantiation.
+
+### Observability Honesty (REQ-NF-007)
+  * **Fabricated Metrics Replaced**: [`observability/route.ts`](../src/app/api/observability/route.ts) previously returned hardcoded placeholder percentiles (`p50LatencyMs: 18`, `p99LatencyMs: 1450`). Added a bounded (500-sample) latency sampler in [`cloudwatch.ts`](../src/lib/aws/cloudwatch.ts) exposing `getLatencyPercentiles()` and `getPipelineTotals()`, so all reported figures are genuinely measured rather than fabricated.
+
+### Documentation Integrity
+  * **Model ID Aligned**: [`.env.example`](../.env.example) shipped `deepseek.v3.2` while every architecture document claimed Claude 3.5 Sonnet. Standardized on `anthropic.claude-3-5-sonnet-20240620-v1:0` with a documented Haiku alternative, eliminating a potential misrepresentation of the AWS stack to the judging panel.
+  * **False Claims Removed**: [`15_SECURITY.md`](../docs/15_SECURITY.md) asserted a 500-character truncation, API rate limiting, and `IFERROR` formula wrapping — none of which existed. The truncation control is now genuinely implemented; the other two claims were deleted rather than overstated. Also repaired file corruption (a duplicated `# 16` heading had been embedded inside the security document).
+  * **Formula Error Semantics Documented**: [`16_ERROR_HANDLING.md`](../docs/16_ERROR_HANDLING.md) now explains that formula failures surface as explicit spreadsheet error literals rather than silently coerced to zero, with justification for why a visible error is safer than a wrong number in a financial model.
+  * **Third-Party Licensing Disclosed**: Added an explicit HyperFormula GPLv3 versus project MIT note, since [`formulaEngine.ts`](../src/lib/engine/formulaEngine.ts) pins `licenseKey: 'gpl-v3'`.
+  * **Config Hygiene**: [`tsconfig.json`](../tsconfig.json) compilation target raised from `es5` to `es2017`; [`layout.tsx`](../src/app/layout.tsx) canonical URL made configurable via `NEXT_PUBLIC_SITE_URL` so social share cards resolve correctly.
+
+### Verification Results
+  * `npx tsc --noEmit` — 0 errors
+  * `npm run test` — 14/14 tests passed (100% success)
+  * `npm run test:formulas` — 5/5 formula suites passed
+  * Security regression harness — 12/12 circular-reference cases and 9/9 path-traversal cases passed; confirmed 4 cases the old substring guard got wrong are now correct
+  * `npm run build` — Production build clean, `BUILD_ID` emitted successfully
+
+---
+
+## 2026-10-01 — Defect Resolution: Prompt-to-Model Domain Synthesis & Visual Analytics Data Invariants
+
+### Root Cause Analysis & Resolution
+* **Bedrock Timeout Premature Abort**: In [`bedrock.ts`](../src/lib/aws/bedrock.ts), `AbortSignal.timeout(5000)` was cutting off deep LLM inference (which takes 8-15s for full schema generation). Increased timeout to 45,000ms.
+* **LLM Schema Normalization**: Added [`normalizeAiSchema()`](../src/lib/agents/schemaArchitectAgent.ts) to handle any variation of Bedrock output (array of strings, column objects, array-of-arrays) into strict `{ key, label, type }` columns and `{ A, B, ... }` rows.
+* **Comprehensive Domain Fallback Synthesizer**: Replaced the generic financial fallback in [`schemaArchitectAgent.ts`](../src/lib/agents/schemaArchitectAgent.ts) with specialized synthesizers for **Education & Academics** (BCA Semester 5 student names, real subjects, marks, percentage, grades), **E-Commerce & Orders**, **Project Sprints**, and **Inventory**. Added a dynamic entity parser for any custom prompt.
+* **Domain Formulas**: Added Education rules in [`formulaCompilerAgent.ts`](../src/lib/agents/formulaCompilerAgent.ts) (`=SUM(C2:F2)` for total marks, `=ROUND(G2/400,3)` for percentage, letter grades `=IF(...)`, and `CLASS AVERAGE` summary rows).
+* **Summary Row Double-Counting Fix in Visual Analytics**: In [`VisualAnalyticsView.tsx`](../src/components/views/VisualAnalyticsView.tsx), the aggregation row (`TOTAL / MODEL SUMMARY` or `CLASS AVERAGE`) was previously included in observations, causing 2x doubled aggregates ($1.2M), peak observation being the sum, and pie chart having 50% "TOTAL". Added `isSummaryRow()` filter across trend, pie, ranking, and statistical audit tables.
+* **Scenario Matrix Academic Awareness**: In [`scenarioEngine.ts`](../src/lib/engine/scenarioEngine.ts) and [`ScenarioMatrixView.tsx`](../src/components/views/ScenarioMatrixView.tsx), excluded summary rows from `realRows` (fixing doubled baseline) and added academic scenarios (Curricular Mastery, Remedial Boost, Exam Difficulty Spike, Attendance Dip) without currency formatting for student marks.
+

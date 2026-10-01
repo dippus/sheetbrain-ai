@@ -3,20 +3,124 @@ import { SheetColumn } from '@/types/sheet';
 import { SchemaArchitectOutput } from './types';
 
 interface BedrockSchemaPayload {
-  title: string;
-  category: string;
-  description: string;
-  columns: SheetColumn[];
-  rawRows: Array<Record<string, number | string | boolean | undefined>>;
+  title?: string;
+  category?: string;
+  description?: string;
+  columns?: Array<SheetColumn | string | { name?: string; label?: string; type?: string; width?: number; key?: string }>;
+  rawRows?: Array<Record<string, number | string | boolean | undefined> | Array<number | string | boolean | undefined>>;
   domain?: string;
   hasTimeDimension?: boolean;
+}
+
+/**
+ * Normalizes any variation of Bedrock LLM output (keys, labels, strings, arrays of arrays)
+ * into strict, predictable SheetColumn[] and rawRows with 'A', 'B', 'C' coordinates.
+ */
+function normalizeAiSchema(data: BedrockSchemaPayload, userPrompt: string): SchemaArchitectOutput | null {
+  if (!data || !Array.isArray(data.columns) || data.columns.length < 2) {
+    return null;
+  }
+
+  // 1. Normalize Columns
+  const normalizedColumns: SheetColumn[] = data.columns.map((rawCol, idx) => {
+    const key = String.fromCharCode(65 + idx); // A, B, C, D...
+    let label = '';
+    let type: 'string' | 'number' | 'currency' | 'percentage' | 'date' = 'string';
+    let width = 140;
+
+    if (typeof rawCol === 'string') {
+      label = rawCol;
+    } else if (typeof rawCol === 'object' && rawCol !== null) {
+      label = rawCol.label || (rawCol as { name?: string }).name || `Column ${key}`;
+      if (rawCol.type && ['string', 'number', 'currency', 'percentage', 'date'].includes(rawCol.type)) {
+        type = rawCol.type as 'string' | 'number' | 'currency' | 'percentage' | 'date';
+      }
+      if (rawCol.width && typeof rawCol.width === 'number') {
+        width = rawCol.width;
+      }
+    } else {
+      label = `Column ${key}`;
+    }
+
+    // Heuristic Type Inference based on column semantic label
+    const lowerLabel = label.toLowerCase();
+    if (/percentage|percent|margin|rate|ratio|ctr|share|%|roi/i.test(lowerLabel)) {
+      type = 'percentage';
+    } else if (/cost|price|revenue|salary|burn|cash|arr|mrr|bill|copay|rent|deposit|fee|spend|budget|pnl|profit|val/i.test(lowerLabel)) {
+      type = 'currency';
+    } else if (/mark|score|total|count|quantity|qty|point|unit|grade|hour|day|credit|gpa|rank|id|no|num|duration|calorie|heart/i.test(lowerLabel)) {
+      type = 'number';
+    }
+
+    return { key, label, type, width };
+  });
+
+  // 2. Normalize Raw Rows
+  const rawRowsInput = Array.isArray(data.rawRows) ? data.rawRows : [];
+  if (rawRowsInput.length === 0) return null;
+
+  const normalizedRows: Array<Record<string, number | string | boolean | undefined>> = [];
+
+  rawRowsInput.forEach(rowItem => {
+    const rowObj: Record<string, number | string | boolean | undefined> = {};
+
+    if (Array.isArray(rowItem)) {
+      // Row is an array: [val0, val1, val2]
+      rowItem.forEach((val, idx) => {
+        if (idx < normalizedColumns.length) {
+          const colKey = normalizedColumns[idx].key;
+          rowObj[colKey] = val;
+        }
+      });
+    } else if (typeof rowItem === 'object' && rowItem !== null) {
+      // Row is an object. Might be keyed by 'A', 'B' or by column labels
+      normalizedColumns.forEach((col, idx) => {
+        if (rowItem[col.key] !== undefined) {
+          rowObj[col.key] = rowItem[col.key];
+        } else if (rowItem[col.label] !== undefined) {
+          rowObj[col.key] = rowItem[col.label];
+        } else {
+          // Check by case-insensitive key or original column index
+          const foundEntry = Object.entries(rowItem).find(
+            ([k]) => k.toLowerCase() === col.label.toLowerCase() || k.toLowerCase() === col.key.toLowerCase()
+          );
+          if (foundEntry) {
+            rowObj[col.key] = foundEntry[1];
+          } else {
+            const values = Object.values(rowItem);
+            if (idx < values.length) {
+              rowObj[col.key] = values[idx] as number | string | boolean | undefined;
+            }
+          }
+        }
+      });
+    }
+
+    if (Object.keys(rowObj).length > 0) {
+      normalizedRows.push(rowObj);
+    }
+  });
+
+  if (normalizedRows.length === 0) return null;
+
+  return {
+    title: data.title || userPrompt.slice(0, 45),
+    category: data.category || 'Domain Model',
+    description: data.description || userPrompt,
+    columns: normalizedColumns,
+    rawRows: normalizedRows,
+    metadata: {
+      domain: data.domain || 'Operational Intelligence',
+      hasTimeDimension: data.hasTimeDimension ?? false,
+    },
+  };
 }
 
 /**
  * 🏛️ AGENT 1: The Schema Architect
  * Responsibility: Deconstructs raw user intent into structured column definitions,
  * datatypes, column widths, and realistic benchmark data rows.
- * Does NOT generate formulas — focuses 100% on domain modeling accuracy.
+ * Focuses 100% on domain modeling accuracy.
  */
 export async function executeSchemaArchitect(
   prompt: string
@@ -25,11 +129,18 @@ export async function executeSchemaArchitect(
 
   const systemPrompt = `You are AGENT 1: The Schema Architect for SheetBrain AI.
 Your exclusive responsibility is data modeling and column architecture.
-Analyze the user business prompt and output a structured spreadsheet schema with 6-10 realistic benchmark data rows.
-STRICT RULES:
-1. Do NOT write any Excel formulas (e.g. no '=SUM'). Only output clean, raw data values.
-2. Provide realistic benchmark values (numbers, strings, dates).
+Analyze the user prompt and output a structured spreadsheet schema with 6-8 realistic benchmark data rows.
+
+STRICT INSTRUCTIONS:
+1. Match the EXACT real-world domain of the user request (e.g., student gradebook -> student names, real subjects, marks 0-100; hospital -> patient names, diagnoses, bills; ecommerce -> orders, customers, units).
+2. Do NOT write formula strings (e.g. no '=SUM'). Only output clean, raw data values.
 3. Specify column datatypes accurately ('string' | 'number' | 'currency' | 'percentage' | 'date').
+
+HARD SIZE BUDGET (exceeding it truncates the response and forces a fallback):
+4. EXACTLY 6 columns and EXACTLY 6 data rows.
+5. Every string value under 40 characters. Numbers plain: no thousands separators, no currency symbols.
+6. No prose, no commentary, no markdown fences. Emit the JSON object only.
+
 4. Return strict JSON adhering to:
 {
   "title": string,
@@ -38,44 +149,37 @@ STRICT RULES:
   "domain": string,
   "hasTimeDimension": boolean,
   "columns": [
-    { "key": "A", "label": "Month", "type": "string", "width": 120 },
-    { "key": "B", "label": "Revenue", "type": "currency", "width": 140 }
+    { "key": "A", "label": "Roll No", "type": "string", "width": 110 },
+    { "key": "B", "label": "Student Name", "type": "string", "width": 160 },
+    { "key": "C", "label": "Database Systems", "type": "number", "width": 130 }
   ],
   "rawRows": [
-    { "A": "Jan 2026", "B": 24000 },
-    { "A": "Feb 2026", "B": 28500 }
+    { "A": "BCA-501", "B": "Aarav Sharma", "C": 88 },
+    { "A": "BCA-502", "B": "Priya Patel", "C": 94 }
   ]
 }`;
 
   try {
     const bedrockResult = await invokeBedrockAgent<BedrockSchemaPayload>({
       systemPrompt,
-      userPrompt: `Business Prompt: "${prompt}"`,
-      maxTokens: 1800,
+      userPrompt: `Dataset Intent: "${prompt}"`,
+      // 6 columns x 6 rows of compact JSON comfortably fits this ceiling, and a
+      // smaller budget measurably reduces time-to-first-token on the endpoint.
+      maxTokens: 800,
+      // Semantic domain modelling is the one stage that genuinely requires a
+      // foundation model, so it gets the largest share of the latency budget.
+      timeoutMs: 45000,
     });
 
-    if (
-      bedrockResult.data &&
-      Array.isArray(bedrockResult.data.columns) &&
-      bedrockResult.data.columns.length >= 2 &&
-      Array.isArray(bedrockResult.data.rawRows) &&
-      bedrockResult.data.rawRows.length > 0
-    ) {
-      return {
-        output: {
-          title: bedrockResult.data.title || 'Dynamic Operational Model',
-          category: bedrockResult.data.category || 'Operations',
-          description: bedrockResult.data.description || prompt,
-          columns: bedrockResult.data.columns,
-          rawRows: bedrockResult.data.rawRows,
-          metadata: {
-            domain: bedrockResult.data.domain || 'Business Intelligence',
-            hasTimeDimension: bedrockResult.data.hasTimeDimension ?? true,
-          },
-        },
-        isFallback: false,
-        latencyMs: bedrockResult.latencyMs || Date.now() - startTime,
-      };
+    if (bedrockResult.data) {
+      const normalized = normalizeAiSchema(bedrockResult.data, prompt);
+      if (normalized) {
+        return {
+          output: normalized,
+          isFallback: false,
+          latencyMs: bedrockResult.latencyMs || Date.now() - startTime,
+        };
+      }
     }
   } catch (error) {
     console.warn('[Agent 1: SchemaArchitect] Bedrock invocation note:', error);
@@ -90,10 +194,59 @@ STRICT RULES:
   };
 }
 
-function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOutput {
+export function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOutput {
   const p = prompt.toLowerCase();
 
-  // 1. SaaS / Financial Runway
+  // 1. Education / Student Gradebook / Academic Marksheet (BCA, Semester, School, Exam, College, Marks)
+  if (
+    p.includes('student') ||
+    p.includes('grade') ||
+    p.includes('bca') ||
+    p.includes('semester') ||
+    p.includes('marks') ||
+    p.includes('school') ||
+    p.includes('college') ||
+    p.includes('exam') ||
+    p.includes('class') ||
+    p.includes('university') ||
+    p.includes('academic') ||
+    p.includes('report card') ||
+    p.includes('cgpa') ||
+    p.includes('gpa')
+  ) {
+    const isBCA = p.includes('bca') || p.includes('sem');
+    const title = isBCA ? 'BCA Semester 5 Student Academic Gradebook & Results' : 'Student Academic Gradebook & Performance Register';
+
+    return {
+      title,
+      category: 'Education',
+      description: 'Comprehensive student academic performance record with subject marks, aggregate score, percentage, and letter grades.',
+      columns: [
+        { key: 'A', label: 'Roll No', type: 'string', width: 110 },
+        { key: 'B', label: 'Student Name', type: 'string', width: 160 },
+        { key: 'C', label: 'Database Systems (DBMS)', type: 'number', width: 160 },
+        { key: 'D', label: 'Web Technologies', type: 'number', width: 150 },
+        { key: 'E', label: 'Software Engineering', type: 'number', width: 160 },
+        { key: 'F', label: 'Python Programming', type: 'number', width: 150 },
+        { key: 'G', label: 'Total Marks (400)', type: 'number', width: 140 },
+        { key: 'H', label: 'Percentage', type: 'percentage', width: 130 },
+        { key: 'I', label: 'Final Grade', type: 'string', width: 110 },
+        { key: 'J', label: 'Academic Status', type: 'string', width: 130 },
+      ],
+      rawRows: [
+        { A: 'BCA-501', B: 'Aarav Sharma', C: 88, D: 92, E: 85, F: 90, G: 355, H: 0.888, I: 'A+', J: 'Distinction' },
+        { A: 'BCA-502', B: 'Priya Patel', C: 94, D: 91, E: 89, F: 95, G: 369, H: 0.923, I: 'A+', J: 'Distinction' },
+        { A: 'BCA-503', B: 'Rohan Verma', C: 72, D: 68, E: 75, F: 70, G: 285, H: 0.713, I: 'A', J: 'First Class' },
+        { A: 'BCA-504', B: 'Sneha Rao', C: 81, D: 85, E: 78, F: 84, G: 328, H: 0.820, I: 'A', J: 'First Class' },
+        { A: 'BCA-505', B: 'Vikram Malhotra', C: 65, D: 70, E: 62, F: 68, G: 265, H: 0.663, I: 'B', J: 'Second Class' },
+        { A: 'BCA-506', B: 'Ananya Iyer', C: 91, D: 95, E: 93, F: 96, G: 375, H: 0.938, I: 'A+', J: 'Distinction' },
+        { A: 'BCA-507', B: 'Rahul Deshmukh', C: 58, D: 62, E: 55, F: 60, G: 235, H: 0.588, I: 'B', J: 'Second Class' },
+      ],
+      metadata: { domain: 'Education & Academics', hasTimeDimension: false },
+    };
+  }
+
+  // 2. SaaS / Financial Runway
   if (p.includes('saas') || p.includes('runway') || p.includes('mrr') || p.includes('arr') || p.includes('cashflow') || p.includes('burn')) {
     return {
       title: '12-Month SaaS Financial Runway & Unit Economics',
@@ -122,7 +275,7 @@ function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOutput {
     };
   }
 
-  // 2. Payroll / Human Resources
+  // 3. Payroll / Human Resources
   if (p.includes('payroll') || p.includes('salary') || p.includes('employee') || p.includes('compensation') || p.includes('wage')) {
     return {
       title: 'Enterprise Employee Payroll & Compensation Register',
@@ -148,7 +301,7 @@ function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOutput {
     };
   }
 
-  // 3. Healthcare / Clinical Billing
+  // 4. Healthcare / Clinical Billing
   if (p.includes('hospital') || p.includes('health') || p.includes('patient') || p.includes('clinic') || p.includes('medical') || p.includes('doctor')) {
     return {
       title: 'Clinical Patient Billing & Insurance Ledger',
@@ -173,26 +326,116 @@ function synthesizeDeterministicSchema(prompt: string): SchemaArchitectOutput {
     };
   }
 
-  // 4. Default Enterprise Operational Horizon Model
+  // 5. E-Commerce & Retail Orders / Sales
+  if (p.includes('order') || p.includes('sales') || p.includes('store') || p.includes('ecommerce') || p.includes('product') || p.includes('customer') || p.includes('cart')) {
+    return {
+      title: 'E-Commerce Customer Order & Fulfillment Register',
+      category: 'Sales',
+      description: 'Live order transaction log tracking customer purchases, units, discounts, and realized net revenue.',
+      columns: [
+        { key: 'A', label: 'Order ID', type: 'string', width: 120 },
+        { key: 'B', label: 'Customer Name', type: 'string', width: 150 },
+        { key: 'C', label: 'Product Category', type: 'string', width: 140 },
+        { key: 'D', label: 'Units Sold', type: 'number', width: 110 },
+        { key: 'E', label: 'Unit Price', type: 'currency', width: 120 },
+        { key: 'F', label: 'Gross Revenue', type: 'currency', width: 140 },
+        { key: 'G', label: 'Discount', type: 'currency', width: 120 },
+        { key: 'H', label: 'Net Revenue', type: 'currency', width: 140 },
+      ],
+      rawRows: [
+        { A: 'ORD-9021', B: 'Rohan Mehra', C: 'Electronics', D: 2, E: 450, F: 900, G: 50, H: 850 },
+        { A: 'ORD-9022', B: 'Alisha Khan', C: 'Smart Home', D: 1, E: 280, F: 280, G: 0, H: 280 },
+        { A: 'ORD-9023', B: 'Devendra Rao', C: 'Accessories', D: 5, E: 45, F: 225, G: 25, H: 200 },
+        { A: 'ORD-9024', B: 'Kavita Singh', C: 'Computing', D: 1, E: 1200, F: 1200, G: 100, H: 1100 },
+        { A: 'ORD-9025', B: 'Arjun Das', C: 'Electronics', D: 3, E: 310, F: 930, G: 80, H: 850 },
+        { A: 'ORD-9026', B: 'Simran Bajaj', C: 'Audio', D: 2, E: 180, F: 360, G: 30, H: 330 },
+      ],
+      metadata: { domain: 'E-Commerce & Sales', hasTimeDimension: false },
+    };
+  }
+
+  // 6. Project Management & Agile Sprint
+  if (p.includes('project') || p.includes('task') || p.includes('sprint') || p.includes('jira') || p.includes('agile') || p.includes('bug') || p.includes('scrum')) {
+    return {
+      title: 'Agile Sprint Delivery & Task Velocity Board',
+      category: 'Project Management',
+      description: 'Engineering sprint tracking board with story points, estimated vs actual hours, and delivery status.',
+      columns: [
+        { key: 'A', label: 'Task Key', type: 'string', width: 110 },
+        { key: 'B', label: 'Task Summary', type: 'string', width: 200 },
+        { key: 'C', label: 'Assignee', type: 'string', width: 140 },
+        { key: 'D', label: 'Story Points', type: 'number', width: 110 },
+        { key: 'E', label: 'Estimated Hours', type: 'number', width: 130 },
+        { key: 'F', label: 'Actual Hours', type: 'number', width: 120 },
+        { key: 'G', label: 'Hour Variance', type: 'number', width: 120 },
+        { key: 'H', label: 'Sprint Status', type: 'string', width: 120 },
+      ],
+      rawRows: [
+        { A: 'ENG-101', B: 'Auth0 SSO Integration', C: 'Vikram S.', D: 5, E: 24, F: 20, G: -4, H: 'Done' },
+        { A: 'ENG-102', B: 'HyperFormula v3 Upgrade', C: 'Priya K.', D: 8, E: 36, F: 42, G: 6, H: 'Review' },
+        { A: 'ENG-103', B: 'S3 Multi-Region Failover', C: 'Alex M.', D: 5, E: 20, F: 18, G: -2, H: 'Done' },
+        { A: 'ENG-104', B: 'Mobile Touch Responsiveness', C: 'Sofia C.', D: 3, E: 16, F: 14, G: -2, H: 'Done' },
+        { A: 'ENG-105', B: 'Real-time WebSocket Sync', C: 'David K.', D: 13, E: 48, F: 52, G: 4, H: 'In Progress' },
+        { A: 'ENG-106', B: 'PDF Export Quality Fix', C: 'Elena R.', D: 2, E: 10, F: 8, G: -2, H: 'Done' },
+      ],
+      metadata: { domain: 'Project Management', hasTimeDimension: false },
+    };
+  }
+
+  // 7. Inventory & Supply Chain
+  if (p.includes('inventory') || p.includes('stock') || p.includes('sku') || p.includes('warehouse') || p.includes('supply')) {
+    return {
+      title: 'Warehouse Inventory Stock & Reorder Tracker',
+      category: 'Inventory',
+      description: 'Physical inventory management register with stock levels, unit valuation, and automated reorder alerts.',
+      columns: [
+        { key: 'A', label: 'SKU Code', type: 'string', width: 120 },
+        { key: 'B', label: 'Product Name', type: 'string', width: 170 },
+        { key: 'C', label: 'Category', type: 'string', width: 130 },
+        { key: 'D', label: 'In-Stock Units', type: 'number', width: 120 },
+        { key: 'E', label: 'Unit Cost', type: 'currency', width: 120 },
+        { key: 'F', label: 'Total Valuation', type: 'currency', width: 140 },
+        { key: 'G', label: 'Reorder Level', type: 'number', width: 120 },
+        { key: 'H', label: 'Stock Status', type: 'string', width: 120 },
+      ],
+      rawRows: [
+        { A: 'SKU-001', B: 'Ergonomic Desk Chair', C: 'Furniture', D: 45, E: 120, F: 5400, G: 20, H: 'Adequate' },
+        { A: 'SKU-002', B: 'Standing Desk Frame', C: 'Furniture', D: 18, E: 260, F: 4680, G: 25, H: 'Reorder Due' },
+        { A: 'SKU-003', B: '4K Monitor 27-inch', C: 'Electronics', D: 32, E: 320, F: 10240, G: 15, H: 'Adequate' },
+        { A: 'SKU-004', B: 'Mechanical Keyboard', C: 'Peripherals', D: 75, E: 55, F: 4125, G: 30, H: 'Adequate' },
+        { A: 'SKU-005', B: 'USB-C Docking Station', C: 'Peripherals', D: 12, E: 85, F: 1020, G: 20, H: 'Low Stock' },
+        { A: 'SKU-006', B: 'Noise Cancelling Headset', C: 'Audio', D: 60, E: 95, F: 5700, G: 25, H: 'Adequate' },
+      ],
+      metadata: { domain: 'Inventory & Supply Chain', hasTimeDimension: false },
+    };
+  }
+
+  // 8. Smart Dynamic Generator for any custom prompt:
+  // Instead of a generic financial template with "Target Metric ($1.2M)",
+  // parse the prompt words to generate contextual columns and realistic numbers.
+  const cleanedTitle = prompt.length > 45 ? `${prompt.slice(0, 42)}...` : prompt;
+  const isFinance = /finance|revenue|profit|margin|money|fund|expense|investment|crypto/i.test(p);
+
   return {
-    title: prompt.length > 40 ? `${prompt.slice(0, 37)}... Model` : `${prompt} Operational Model`,
-    category: 'Operations',
-    description: `Multi-horizon operational dataset structured for: "${prompt}".`,
+    title: `${cleanedTitle} Matrix`,
+    category: isFinance ? 'Finance' : 'Operations',
+    description: `Structured dynamic dataset compiled for: "${prompt}".`,
     columns: [
-      { key: 'A', label: 'Period / Segment', type: 'string', width: 150 },
-      { key: 'B', label: 'Target Metric', type: 'currency', width: 140 },
-      { key: 'C', label: 'Operating Cost', type: 'currency', width: 140 },
-      { key: 'D', label: 'Net Efficiency', type: 'currency', width: 140 },
-      { key: 'E', label: 'Growth Margin', type: 'percentage', width: 130 },
+      { key: 'A', label: 'Item / Record', type: 'string', width: 150 },
+      { key: 'B', label: isFinance ? 'Primary Volume' : 'Recorded Observation', type: isFinance ? 'currency' : 'number', width: 160 },
+      { key: 'C', label: isFinance ? 'Operational Cost' : 'Secondary Benchmark', type: isFinance ? 'currency' : 'number', width: 160 },
+      { key: 'D', label: isFinance ? 'Net Differential' : 'Performance Variance', type: isFinance ? 'currency' : 'number', width: 160 },
+      { key: 'E', label: 'Efficiency Ratio', type: 'percentage', width: 130 },
     ],
     rawRows: [
-      { A: 'Horizon Q1', B: 65000, C: 42000, D: 23000, E: 0.35 },
-      { A: 'Horizon Q2', B: 78000, C: 46000, D: 32000, E: 0.41 },
-      { A: 'Horizon Q3', B: 92000, C: 51000, D: 41000, E: 0.45 },
-      { A: 'Horizon Q4', B: 110000, C: 58000, D: 52000, E: 0.47 },
-      { A: 'Horizon Q5', B: 128000, C: 64000, D: 64000, E: 0.50 },
-      { A: 'Horizon Q6', B: 146000, C: 71000, D: 75000, E: 0.51 },
+      { A: 'Observation Alpha', B: isFinance ? 45000 : 185, C: isFinance ? 28000 : 120, D: isFinance ? 17000 : 65, E: 0.38 },
+      { A: 'Observation Beta', B: isFinance ? 62000 : 210, C: isFinance ? 35000 : 145, D: isFinance ? 27000 : 65, E: 0.44 },
+      { A: 'Observation Gamma', B: isFinance ? 78000 : 260, C: isFinance ? 41000 : 160, D: isFinance ? 37000 : 100, E: 0.47 },
+      { A: 'Observation Delta', B: isFinance ? 94000 : 310, C: isFinance ? 49000 : 190, D: isFinance ? 45000 : 120, E: 0.48 },
+      { A: 'Observation Epsilon', B: isFinance ? 112000 : 380, C: isFinance ? 56000 : 210, D: isFinance ? 56000 : 170, E: 0.50 },
+      { A: 'Observation Zeta', B: isFinance ? 135000 : 440, C: isFinance ? 64000 : 230, D: isFinance ? 71000 : 210, E: 0.53 },
     ],
-    metadata: { domain: 'General Business Intelligence', hasTimeDimension: true },
+    metadata: { domain: isFinance ? 'Financial Analysis' : 'General Operational Intelligence', hasTimeDimension: false },
   };
 }
+
