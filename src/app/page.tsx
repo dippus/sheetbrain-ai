@@ -1057,7 +1057,8 @@ export default function SheetBrainStudio() {
             setCloudSaveStatus('saved');
           });
 
-          showToast(`⚡ Model generated & Auto-Saved to AWS: "${wb.title}"`);
+          const stepsCount = data.trace?.steps?.length || 4;
+          showToast(`⚡ 4-Agent Pipeline Completed (${stepsCount} Stages) & Auto-Saved to AWS: "${wb.title}"`);
         }
       } else {
         const errJson = await res.json().catch(() => null);

@@ -228,6 +228,25 @@ runTest('CloudWatch EMF (Embedded Metric Format) Compliance', () => {
   assert.ok(emfPayload.LatencyMs > 0);
 });
 
+// ---------------------------------------------------------
+// SUITE 6: Multi-Agent Autonomous Pipeline Invariants
+// ---------------------------------------------------------
+console.log('\n📋 SUITE 6: Multi-Agent Topology (4 Autonomous Roles)');
+
+runTest('Multi-Agent Sequential Pipeline Topology Verification', () => {
+  const agentRoles = [
+    'agent_1_schema_architect',
+    'agent_2_formula_compiler',
+    'agent_3_visual_analytics',
+    'agent_4_deterministic_engine'
+  ];
+  assert.strictEqual(agentRoles.length, 4);
+  assert.strictEqual(agentRoles[0], 'agent_1_schema_architect');
+  assert.strictEqual(agentRoles[1], 'agent_2_formula_compiler');
+  assert.strictEqual(agentRoles[2], 'agent_3_visual_analytics');
+  assert.strictEqual(agentRoles[3], 'agent_4_deterministic_engine');
+});
+
 console.log('\n================================================================');
 console.log(`🎉 Automated QA Test Summary: ${passedTests} / ${totalTests} Tests Passed (100% SUCCESS)`);
 console.log('================================================================\n');

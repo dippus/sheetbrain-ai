@@ -5,8 +5,19 @@
  * into high-resolution CloudWatch custom metrics in the ap-southeast-2 project region.
  */
 
+export type CloudWatchOperation =
+  | 'GenerateWorkbook'
+  | 'SimulateScenario'
+  | 'LocalDataIngest'
+  | 'FormulaRecalculate'
+  | 'Agent1_SchemaArchitect'
+  | 'Agent2_FormulaCompiler'
+  | 'Agent3_VisualAnalytics'
+  | 'Agent4_DeterministicEngine'
+  | 'GenerateWorkbook_MultiAgentPipeline';
+
 export interface CloudWatchMetricData {
-  operation: 'GenerateWorkbook' | 'SimulateScenario' | 'LocalDataIngest' | 'FormulaRecalculate';
+  operation: CloudWatchOperation;
   latencyMs: number;
   isFallback?: boolean;
   status: 'SUCCESS' | 'ERROR';
