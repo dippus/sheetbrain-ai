@@ -1656,7 +1656,7 @@ export default function SheetBrainStudio() {
               />
             </div>
 
-            <div className={activeView === 'analytics' ? 'flex-1 flex flex-col min-h-0 overflow-y-auto' : 'hidden'}>
+            <div className={activeView === 'analytics' ? 'flex-1 flex flex-col min-h-0 overflow-hidden' : 'hidden'}>
               <VisualAnalyticsView
                 sheet={activeSheet}
                 chartConfig={safeWorkbook?.chartConfig || {
@@ -1668,7 +1668,7 @@ export default function SheetBrainStudio() {
               />
             </div>
 
-            <div className={activeView === 'scenarios' ? 'flex-1 flex flex-col min-h-0 overflow-y-auto' : 'hidden'}>
+            <div className={activeView === 'scenarios' ? 'flex-1 flex flex-col min-h-0 overflow-hidden' : 'hidden'}>
               <ScenarioMatrixView
                 sheet={activeSheet}
                 onSimulate={handleSimulateScenario}
@@ -1689,7 +1689,7 @@ export default function SheetBrainStudio() {
               />
             </div>
 
-            <div className={activeView === 'report' ? 'flex-1 flex flex-col min-h-0 overflow-y-auto' : 'hidden'}>
+            <div className={activeView === 'report' ? 'flex-1 flex flex-col min-h-0 overflow-hidden' : 'hidden'}>
               <ExecutiveReportView
                 workbook={safeWorkbook}
                 sheet={activeSheet}
