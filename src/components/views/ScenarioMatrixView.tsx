@@ -263,11 +263,11 @@ export default function ScenarioMatrixView({
   }
 
   return (
-    <div className="flex-1 p-5 md:p-8 overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col gap-6 select-none transition-colors">
+    <div className="w-full h-full min-h-0 p-5 md:p-8 overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col gap-6 select-none transition-colors">
       
       {/* 1. EXECUTIVE BEFORE vs AFTER VARIANCE BANNER (L1 Surface with Live Pulsing Feedback) */}
       {liveSimMetrics.hasModifications && (
-        <div className="relative overflow-hidden bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-5 md:p-6 shadow-xl dark:shadow-2xl flex flex-wrap items-center justify-between gap-5 transition-all">
+        <div className="shrink-0 relative overflow-hidden bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-5 md:p-6 shadow-xl dark:shadow-2xl flex flex-wrap items-center justify-between gap-5 transition-all">
           {/* Subtle Top Glow Line */}
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-80" />
 
@@ -362,7 +362,7 @@ export default function ScenarioMatrixView({
       )}
 
       {/* 2. SENSITIVITY CONTROL STUDIO (L1 Surface) */}
-      <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl flex flex-col gap-6">
+      <div className="shrink-0 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl flex flex-col gap-6">
         
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800/80">
@@ -612,7 +612,7 @@ export default function ScenarioMatrixView({
 
       {/* 3. SUB-TAB VIEW RENDERING */}
       {activeTab === 'scenarios' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {scenarioMatrix.map(sc => {
             const isFavorable = sc.isPositiveOutcome;
 
@@ -687,7 +687,7 @@ export default function ScenarioMatrixView({
       )}
 
       {activeTab === 'sensitivity_table' && (
-        <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl">
+        <div className="shrink-0 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl">
           <div className="pb-4 border-b border-slate-200/80 dark:border-slate-800/80 mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -755,7 +755,7 @@ export default function ScenarioMatrixView({
       )}
 
       {activeTab === 'monte_carlo' && (
-        <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl flex flex-col gap-6">
+        <div className="shrink-0 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl flex flex-col gap-6">
           <div className="pb-4 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -833,7 +833,7 @@ export default function ScenarioMatrixView({
       )}
 
       {/* 4. CRYSTAL CLEAR PERIOD-BY-PERIOD VARIANCE AUDIT TABLE (BEFORE vs AFTER vs DIFF) */}
-      <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl">
+      <div className="shrink-0 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 md:p-6 shadow-sm dark:shadow-xl">
         <div className="pb-4 border-b border-slate-200/80 dark:border-slate-800/80 mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
