@@ -19,8 +19,8 @@
 - [x] Scaffold Next.js 14 App Router project with TypeScript & Tailwind CSS (`REQ-NF-004`)
 - [x] Configure modular Univer Office SDK packages (`REQ-F-004`)
 - [x] Implement client-side dynamic `UniverSheet` wrapper with SSR protection (`REQ-NF-004`)
-- [x] Configure `amplify.yml` build pipeline (`18_DEPLOYMENT.md`)
-- [ ] Verify live public HTTPS URL on AWS (PASS SHIP GATE)
+- [x] Configure `amplify.yml` build pipeline (`23_DEPLOYMENT.md`)
+- [x] Verify live public HTTPS URL on AWS (PASS SHIP GATE — CLEARED ON AMPLIFY ✅)
 
 ---
 
@@ -41,11 +41,11 @@
 
 ---
 
-## Phase 5: Submission Artifacts, Evidence & Verification (Day 4)
-- [ ] Capture all visual evidence required by `19_EVIDENCE.md`
-- [ ] Execute complete end-to-end smoke test suite (`16_TEST_STRATEGY.md`)
-- [ ] Record 2-minute demo video following `17_DEMO_SCRIPT.md`
-- [ ] Verify all gates in `20_SUBMISSION_CHECKLIST.md`
+## Phase 5: Submission Artifacts, Evidence & Verification (Day 4 — IN PROGRESS 🚀)
+- [x] Capture visual evidence and populate register (`19_EVIDENCE.md`)
+- [x] Execute complete end-to-end automated test suite (12/12 passing in `scripts/test-suite.mjs`)
+- [x] Verify all gates in `21_SUBMISSION_CHECKLIST.md` (Gate 1 & Gate 2 Cleared ✅)
+- [ ] Record 2-minute demo video following `20_DEMO_SCRIPT.md`
 - [ ] Publish project submission story on builder.aws.com and submit before deadline
 
 ---

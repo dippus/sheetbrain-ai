@@ -86,7 +86,7 @@ export async function executeMultiAgentPipeline(userPrompt: string): Promise<Mul
     agentId: 'agent_3_visual_analytics',
     name: 'Agent 3: Visual Analytics',
     role: 'Automated Chart Specification & Visual Telemetry',
-    status: 'SUCCESS',
+    status: analyticsResult.isFallback ? 'FALLBACK' : 'SUCCESS',
     latencyMs: step3Latency,
     details: {
       chartType: analyticsResult.output.chartConfig.type,
@@ -98,7 +98,7 @@ export async function executeMultiAgentPipeline(userPrompt: string): Promise<Mul
     operation: 'Agent3_VisualAnalytics',
     latencyMs: step3Latency,
     status: 'SUCCESS',
-    isFallback: false,
+    isFallback: analyticsResult.isFallback,
     metadata: { chartType: analyticsResult.output.chartConfig.type },
   });
 

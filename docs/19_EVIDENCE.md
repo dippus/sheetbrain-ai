@@ -17,12 +17,12 @@ Where proof is stored?
 
 | Official Requirement | What Proves It? | Where Proof is Stored? | Status |
 |:---|:---|:---|:---:|
-| **1. Coding Agent Connected** | Documented prompts, AI tool execution logs, and IDE session records. | `docs/21_TASKS.md`, prompt commit messages, and builder journey log. | Verified |
-| **2. Live AWS Deployment (Ship Gate)** | Public, reachable HTTPS URL on AWS Amplify (`*.amplifyapp.com`). | AWS Amplify Console + Live URL in submission form. | Pending Deploy (Phase 2) |
-| **3. AWS Services Used** | Server-side integration of Amazon Bedrock (Claude 3.5 Sonnet), CloudWatch logging, Amplify. | `docs/09_AWS_ARCHITECTURE.md`, package dependencies, codebase serverless routes. | Documented |
-| **4. Development Process** | Chronological builder story recounting architecture decisions and AI-assisted iterations. | Written Builder Center project story on builder.aws.com. | Storyboard Ready |
-| **5. Original & Unpublished App** | Fresh GitHub repository with clean commit history starting from hackathon kickoff. | Public GitHub repository commit tree. | Verified |
-| **6. Open Source Compliance** | OSI-approved open source license at project root. | `LICENSE` (MIT License) at root. | Verified |
+| **1. Coding Agent Connected** | Documented prompts, AI tool execution logs, and IDE session records. | `docs/18_TASKS.md`, prompt commit messages, and builder journey log. | Verified ✅ |
+| **2. Live AWS Deployment (Ship Gate)** | Public, reachable HTTPS URL on AWS Amplify (`*.amplifyapp.com`). | AWS Amplify Hosting Console + Live Production Deployment URL. | Verified & Live (Ship Gate Cleared ✅) |
+| **3. AWS Services Used** | Server-side integration of Amazon Bedrock (Claude 3.5 Sonnet / Haiku), CloudWatch EMF, S3 storage, Amplify. | `docs/09_AWS_ARCHITECTURE.md`, `src/lib/aws/`, serverless route handlers. | Verified ✅ |
+| **4. Development Process** | Chronological builder story recounting architecture decisions and AI-assisted iterations. | `docs/22_AI_DEVELOPMENT_LOG.md` and Builder Center project story. | Verified ✅ |
+| **5. Original & Unpublished App** | Fresh GitHub repository with clean commit history starting from hackathon kickoff. | Public GitHub repository commit tree (`main` branch). | Verified ✅ |
+| **6. Open Source Compliance** | OSI-approved open source license at project root. | `LICENSE` (MIT License) at root. | Verified ✅ |
 
 ---
 

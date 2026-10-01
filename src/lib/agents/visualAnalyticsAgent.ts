@@ -1,21 +1,98 @@
 import { ChartConfig } from '@/types/sheet';
+import { invokeBedrockAgent } from '@/lib/aws/bedrock';
 import { SchemaArchitectOutput, FormulaCompilerOutput, VisualAnalyticsOutput } from './types';
+
+interface BedrockAnalyticsPayload {
+  chartType: 'line' | 'bar' | 'area';
+  title?: string;
+  primarySeriesKey: string;
+  primarySeriesLabel: string;
+  secondarySeriesKey?: string;
+  secondarySeriesLabel?: string;
+  narrativeInsight?: string;
+}
 
 /**
  * 📊 AGENT 3: The Visual Analytics Engine
- * Responsibility: Analyzes schema dimensions and data distributions,
- * selects the optimal visualization model (Area, Line, Bar),
- * and maps primary series with curated theme palettes.
+ * Responsibility: Synthesizes intelligent narrative data visualizations by analyzing
+ * schema dimensions, mathematical dependencies, and numerical distributions.
+ * Features dedicated Amazon Bedrock reasoning with seamless deterministic fallback.
  */
 export async function executeVisualAnalytics(
   schema: SchemaArchitectOutput,
-  _compiledData: FormulaCompilerOutput
+  compiledData: FormulaCompilerOutput
 ): Promise<{ output: VisualAnalyticsOutput; isFallback: boolean; latencyMs: number }> {
   const startTime = Date.now();
-  const { columns, metadata, title } = schema;
-
-  // 1. Identify primary numeric or currency column
+  const { columns, metadata, title, rawRows } = schema;
   const numericCols = columns.filter(c => c.type === 'currency' || c.type === 'number');
+
+  // Attempt Amazon Bedrock Visual Intelligence Invocation
+  const systemPrompt = `You are AGENT 3: The Visual Analytics Engine for SheetBrain AI.
+Analyze the spreadsheet schema, column definitions, and compiled numerical data.
+Determine:
+1. Optimal visualization model ('area' for continuous time-series / runway, 'bar' for categorical / payroll / departments, 'line' for general trends).
+2. The most critical primary metric column and optional secondary comparison column.
+3. A 1-sentence executive narrative insight.
+Return strict JSON:
+{
+  "chartType": "area" | "line" | "bar",
+  "title": string,
+  "primarySeriesKey": "B",
+  "primarySeriesLabel": "Metric Label",
+  "secondarySeriesKey": "C",
+  "secondarySeriesLabel": "Comparison Label",
+  "narrativeInsight": string
+}`;
+
+  try {
+    const bedrockResult = await invokeBedrockAgent<BedrockAnalyticsPayload>({
+      systemPrompt,
+      userPrompt: `Dataset: "${title}". Columns: ${JSON.stringify(columns.map(c => ({ key: c.key, label: c.label, type: c.type })))}. Rows count: ${rawRows.length}. Sample compiled cells: ${JSON.stringify(Object.keys(compiledData.cellData).slice(0, 10))}`,
+      maxTokens: 1000,
+    });
+
+    if (bedrockResult.data && bedrockResult.data.primarySeriesKey) {
+      const validTypes: Array<'line' | 'bar' | 'area'> = ['line', 'bar', 'area'];
+      const chartType = validTypes.includes(bedrockResult.data.chartType) ? bedrockResult.data.chartType : 'area';
+
+      const series = [
+        {
+          key: bedrockResult.data.primarySeriesKey,
+          label: bedrockResult.data.primarySeriesLabel || 'Primary Metric',
+          color: '#06b6d4', // Cyan
+        },
+      ];
+
+      if (bedrockResult.data.secondarySeriesKey && bedrockResult.data.secondarySeriesKey !== bedrockResult.data.primarySeriesKey) {
+        series.push({
+          key: bedrockResult.data.secondarySeriesKey,
+          label: bedrockResult.data.secondarySeriesLabel || 'Secondary Metric',
+          color: '#10b981', // Emerald
+        });
+      }
+
+      const chartConfig: ChartConfig = {
+        type: chartType,
+        title: bedrockResult.data.title || `${title} — Strategic Horizon`,
+        xAxisKey: columns[0]?.key || 'A',
+        series,
+      };
+
+      return {
+        output: {
+          chartConfig,
+          primaryMetricKey: bedrockResult.data.primarySeriesKey,
+          narrativeInsight: bedrockResult.data.narrativeInsight || `AI synthesized ${chartType} visualization across active data horizons.`,
+        },
+        isFallback: false,
+        latencyMs: bedrockResult.latencyMs || Date.now() - startTime,
+      };
+    }
+  } catch (error) {
+    console.warn('[Agent 3: VisualAnalytics] Bedrock invocation note:', error);
+  }
+
+  // Deterministic Fallback: Rule-Based Narrative Synthesizer
   const primaryCol = numericCols[numericCols.length > 2 ? 1 : 0] || numericCols[0] || columns[1] || columns[0];
   const secondaryCol = numericCols.length > 1 ? numericCols[numericCols.length - 1] : undefined;
 
@@ -51,7 +128,7 @@ export async function executeVisualAnalytics(
       primaryMetricKey: primaryCol?.key || 'B',
       narrativeInsight: `Synthesized ${chartType} visualization tracking ${primaryCol?.label} across active horizons.`,
     },
-    isFallback: false,
+    isFallback: true,
     latencyMs: Date.now() - startTime,
   };
 }
