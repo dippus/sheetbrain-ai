@@ -33,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full dark" suppressHydrationWarning>
+    <html lang="en" className="h-full w-full max-w-full dark overflow-hidden overflow-x-hidden select-none" style={{ overscrollBehavior: 'none' }} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -54,7 +54,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="h-full bg-[var(--app-bg)] text-[var(--cell-text)] antialiased overflow-hidden">
+      <body className="h-full w-full max-w-full bg-[var(--app-bg)] text-[var(--cell-text)] antialiased overflow-hidden overflow-x-hidden overscroll-none">
         {children}
       </body>
     </html>

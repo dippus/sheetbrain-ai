@@ -99,6 +99,7 @@ interface UniverSheetWrapperProps {
   onAddSheet?: () => void;
   onDeleteSheet?: (id: string) => void;
   onRenameSheet?: (id: string, newName: string) => void;
+  onReorderSheets?: (sourceId: string, targetId: string) => void;
   theme?: 'dark' | 'light' | 'system';
   activeScenario?: string;
   onCommitBaseline?: () => void;
@@ -116,6 +117,7 @@ export default function UniverSheetWrapper({
   onAddSheet,
   onDeleteSheet,
   onRenameSheet,
+  onReorderSheets,
   theme = 'dark',
   activeScenario,
   onCommitBaseline,
@@ -131,6 +133,8 @@ export default function UniverSheetWrapper({
   const [editingSheetId, setEditingSheetId] = useState<string | null>(null);
   const [tempSheetName, setTempSheetName] = useState<string>('');
   const [wrapperRevision, setWrapperRevision] = useState<number>(0);
+  const [draggedSheetId, setDraggedSheetId] = useState<string | null>(null);
+  const [dragOverSheetId, setDragOverSheetId] = useState<string | null>(null);
   const formulaMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -673,11 +677,48 @@ export default function UniverSheetWrapper({
             return (
               <div
                 key={s.id}
+                draggable={!editingSheetId}
+                onDragStart={(e) => {
+                  setDraggedSheetId(s.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', s.id);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverSheetId !== s.id) {
+                    setDragOverSheetId(s.id);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  e.stopPropagation();
+                  if (dragOverSheetId === s.id) {
+                    setDragOverSheetId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const sourceId = e.dataTransfer.getData('text/plain') || draggedSheetId;
+                  if (sourceId && sourceId !== s.id && onReorderSheets) {
+                    onReorderSheets(sourceId, s.id);
+                  }
+                  setDraggedSheetId(null);
+                  setDragOverSheetId(null);
+                }}
+                onDragEnd={() => {
+                  setDraggedSheetId(null);
+                  setDragOverSheetId(null);
+                }}
                 onClick={() => onSelectSheet?.(s.id)}
-                className={`group flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition shrink-0 ${
+                title="Click to select, drag anywhere to reorder sheet tab"
+                className={`group flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold cursor-grab active:cursor-grabbing transition shrink-0 ${
                   isActive
                     ? 'bg-white dark:bg-slate-900 text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700 shadow-xs'
                     : 'bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800/50'
+                } ${draggedSheetId === s.id ? 'opacity-40 scale-95 border-dashed border-cyan-500' : ''} ${
+                  dragOverSheetId === s.id && draggedSheetId !== s.id ? 'border-2 border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/40 ring-2 ring-cyan-500/20' : ''
                 }`}
               >
                 <FileSpreadsheet className={`w-3.5 h-3.5 ${isActive ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400'}`} />
@@ -708,6 +749,40 @@ export default function UniverSheetWrapper({
                   >
                     {s.name || `Sheet ${idx + 1}`}
                   </span>
+                )}
+
+                {/* Move Left / Right Quick Reorder Arrows (visible on hover) */}
+                {(sheets || []).length > 1 && onReorderSheets && editingSheetId !== s.id && (
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 ml-1 transition">
+                    {idx > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const prevSheet = (sheets || [])[idx - 1];
+                          if (prevSheet) onReorderSheets(s.id, prevSheet.id);
+                        }}
+                        title="Move sheet left"
+                        className="hover:text-cyan-400 p-0.5 rounded text-[10px]"
+                      >
+                        ◀
+                      </button>
+                    )}
+                    {idx < (sheets || []).length - 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const nextSheet = (sheets || [])[idx + 1];
+                          if (nextSheet) onReorderSheets(s.id, nextSheet.id);
+                        }}
+                        title="Move sheet right"
+                        className="hover:text-cyan-400 p-0.5 rounded text-[10px]"
+                      >
+                        ▶
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Rename Pencil Button (visible on hover) */}

@@ -41,6 +41,7 @@ interface WorkspaceSidebarProps {
   onAddSheet?: () => void;
   onDeleteSheet?: (sheetId: string) => void;
   onRenameSheet?: (sheetId: string, newName: string) => void;
+  onReorderSheets?: (sourceId: string, targetId: string) => void;
   onNewBlankSpreadsheet?: () => void;
   onClearAllData?: () => void;
 }
@@ -60,6 +61,7 @@ export default function WorkspaceSidebar({
   onAddSheet,
   onDeleteSheet,
   onRenameSheet,
+  onReorderSheets,
   onNewBlankSpreadsheet,
   onClearAllData,
 }: WorkspaceSidebarProps) {
@@ -199,7 +201,7 @@ export default function WorkspaceSidebar({
   }
 
   return (
-    <aside aria-label="Workspace sidebar" className="flex h-full min-h-0 w-64 md:w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)]">
+    <aside aria-label="Workspace sidebar" className="flex h-full min-h-0 w-64 md:w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--border-color)] bg-[var(--panel-bg)] text-[var(--cell-text)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-2xl">
       <header className="shrink-0 border-b border-[var(--border-color)]">
         <div className="flex min-w-0 items-center gap-2 px-3 py-3.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -318,7 +320,26 @@ export default function WorkspaceSidebar({
                   return (
                     <div
                       key={s.id}
-                      className={`group flex min-w-0 items-center justify-between rounded-lg border transition-all duration-150 ${selectionStyle(isActive)}`}
+                      draggable={true}
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', s.id);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const sourceId = e.dataTransfer.getData('text/plain');
+                        if (sourceId && sourceId !== s.id && onReorderSheets) {
+                          onReorderSheets(sourceId, s.id);
+                        }
+                      }}
+                      title="Click to select, drag to reorder sheet"
+                      className={`group flex min-w-0 items-center justify-between rounded-lg border transition-all duration-150 cursor-grab active:cursor-grabbing ${selectionStyle(isActive)}`}
                     >
                       <button
                         type="button"
@@ -340,6 +361,40 @@ export default function WorkspaceSidebar({
                           </span>
                         )}
                       </button>
+
+                      {/* Move Up/Down Quick Reorder Arrows */}
+                      {sheetsList.length > 1 && onReorderSheets && (
+                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 mr-1 transition">
+                          {idx > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const prevSheet = sheetsList[idx - 1];
+                                if (prevSheet) onReorderSheets(s.id, prevSheet.id);
+                              }}
+                              title="Move sheet up"
+                              className="text-[10px] p-0.5 hover:text-cyan-400 text-slate-400 rounded"
+                            >
+                              ▲
+                            </button>
+                          )}
+                          {idx < sheetsList.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const nextSheet = sheetsList[idx + 1];
+                                if (nextSheet) onReorderSheets(s.id, nextSheet.id);
+                              }}
+                              title="Move sheet down"
+                              className="text-[10px] p-0.5 hover:text-cyan-400 text-slate-400 rounded"
+                            >
+                              ▼
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {onDeleteSheet && (
                         <button
                           type="button"

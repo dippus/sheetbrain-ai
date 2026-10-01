@@ -374,8 +374,14 @@ export default function UniverSheetCore({
 
         if (isNonMutation) return;
 
-        // Snappy sync (100ms) for cell edits / confirm / undo / redo to synchronize without lag
-        const isCellMutation = cmdId.includes('undo') || cmdId.includes('redo') || cmdId.includes('set-range-values') || cmdId.includes('set-cell-value');
+        // Snappy sync (100ms) for cell edits / confirm / move-range / auto-fill / undo / redo to synchronize without lag
+        const isCellMutation =
+          cmdId.includes('undo') ||
+          cmdId.includes('redo') ||
+          cmdId.includes('set-range-values') ||
+          cmdId.includes('set-cell-value') ||
+          cmdId.includes('move-range') ||
+          cmdId.includes('auto-fill');
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }

@@ -107,6 +107,8 @@ export default function SheetBrainStudio() {
   const [activeScenario, setActiveScenario] = useState<string | undefined>(undefined);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string; onUndo?: () => void } | null>(null);
   const [activeView, setActiveView] = useState<'grid' | 'analytics' | 'scenarios' | 'report' | 'audit'>('grid');
+  // Starts expanded so the server and first client render agree; the phone
+  // correction below runs after mount to avoid a hydration mismatch.
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -278,7 +280,7 @@ export default function SheetBrainStudio() {
     setActiveScenario(undefined);
     setActiveView('grid');
     setGridRevision(r => r + 1);
-    showToast('🗑️ All datasets cleared — clean blank spreadsheet ready');
+    showToast('ðŸ—‘ï¸ All datasets cleared â€” clean blank spreadsheet ready');
   }, [showToast]);
 
   // 5. Template & Local File Selector Callback (Real disk reading via /api/local-data)
@@ -481,7 +483,7 @@ export default function SheetBrainStudio() {
               if (data.success && data.workbook) {
                 setCurrentWorkbook(data.workbook);
                 setActiveSheetId(data.workbook.sheets[0]?.id || 'sheet_1');
-                showToast(`☁️ Loaded shared workbook "${data.workbook.title}" from Amazon S3!`);
+                showToast(`â˜ï¸ Loaded shared workbook "${data.workbook.title}" from Amazon S3!`);
               }
             })
             .catch(e => console.warn('[Cloud Load] Notice:', e));
@@ -715,7 +717,7 @@ export default function SheetBrainStudio() {
         localStorage.setItem('sheetbrain_active_sheet_id', 'sheet_1');
       } catch (e) {}
     }
-    showToast(`Deleted from workspace — clean blank sheet ready`);
+    showToast(`Deleted from workspace â€” clean blank sheet ready`);
   }, [datasets, activeTemplateKey, showToast]);
 
   const handleRenameSheet = useCallback((sheetId: string, newName: string) => {
@@ -729,6 +731,36 @@ export default function SheetBrainStudio() {
     });
     showToast(`Renamed sheet to "${newName.trim()}"`);
   }, [showToast]);
+
+  const handleReorderSheets = useCallback((sourceId: string, targetId: string) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    setCurrentWorkbook(prev => {
+      if (!prev || !prev.sheets) return prev;
+      const sheets = [...prev.sheets];
+      const sourceIdx = sheets.findIndex(s => s.id === sourceId);
+      const targetIdx = sheets.findIndex(s => s.id === targetId);
+      if (sourceIdx === -1 || targetIdx === -1) return prev;
+      const [moved] = sheets.splice(sourceIdx, 1);
+      sheets.splice(targetIdx, 0, moved);
+      return {
+        ...prev,
+        sheets,
+      };
+    });
+    setGridRevision(r => r + 1);
+    showToast('Reordered sheet tab');
+  }, [showToast]);
+
+  // Lock window horizontal scroll so gestures never shoot the page sideways
+  useEffect(() => {
+    const lockScroll = () => {
+      if (window.scrollX !== 0 || window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener('scroll', lockScroll, { passive: true });
+    return () => window.removeEventListener('scroll', lockScroll);
+  }, []);
 
   // Batch Processor for Multi-File Selection (.xlsx, .csv)
   const processBatchFiles = useCallback(async (files: File[]) => {
@@ -904,8 +936,8 @@ export default function SheetBrainStudio() {
         } catch (e) {}
         showToast(
           data.isFallback
-            ? `☁️ Persisted snapshot! Share link copied: ${shareUrl}`
-            : `☁️ Saved to Amazon S3 (ap-southeast-2)! Share link copied: ${shareUrl}`,
+            ? `â˜ï¸ Persisted snapshot! Share link copied: ${shareUrl}`
+            : `â˜ï¸ Saved to Amazon S3 (ap-southeast-2)! Share link copied: ${shareUrl}`,
           'success'
         );
       } else {
@@ -1009,6 +1041,16 @@ export default function SheetBrainStudio() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [handleToggleTheme, handleAddSheet]);
 
+  // On phones the expanded navigator (256px) would leave almost no room for the
+  // grid, so collapse it once after mount. Done in an effect rather than the
+  // state initialiser so the server-rendered markup still matches the first
+  // client render (REQ-NF-004: no hydration mismatch).
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setIsSidebarCollapsed(true);
+    }
+  }, []);
+
   const handleGenerateWithPrompt = async (promptToRun: string) => {
     if (!promptToRun.trim()) return;
 
@@ -1066,7 +1108,7 @@ export default function SheetBrainStudio() {
           });
 
           const stepsCount = data.trace?.steps?.length || 4;
-          showToast(`⚡ 4-Agent Pipeline Completed (${stepsCount} Stages) & Auto-Saved to AWS: "${wb.title}"`);
+          showToast(`âš¡ 4-Agent Pipeline Completed (${stepsCount} Stages) & Auto-Saved to AWS: "${wb.title}"`);
         }
       } else {
         const errJson = await res.json().catch(() => null);
@@ -1177,7 +1219,7 @@ export default function SheetBrainStudio() {
     const modelTitle = safeWorkbook?.title || 'SheetBrain Financial Model';
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     
-    return `# 🏛️ Executive Boardroom Briefing: ${modelTitle}
+    return `# ðŸ›ï¸ Executive Boardroom Briefing: ${modelTitle}
 *Generated on ${dateStr} by SheetBrain AI (Bedrock Multi-Agent + Univer Office Engine)*
 
 ## 1. Executive Summary & Model Overview
@@ -1204,7 +1246,7 @@ export default function SheetBrainStudio() {
 3. Review formula dependencies in Formula Auditor before boardroom distribution.
 
 ---
-*SheetBrain AI — Enterprise Spreadsheet Intelligence*
+*SheetBrain AI â€” Enterprise Spreadsheet Intelligence*
 `;
   }, [activeSheet, safeWorkbook, activeScenario]);
 
@@ -1336,17 +1378,31 @@ export default function SheetBrainStudio() {
 
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); }}
-      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false); }}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDraggingOver(false);
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          processBatchFiles(Array.from(e.dataTransfer.files));
+      onDragOver={(e) => {
+        const hasFiles = e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files');
+        if (hasFiles) {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingOver(true);
         }
       }}
-      className="studio-shell flex text-slate-900 dark:text-slate-100 overflow-hidden relative"
+      onDragLeave={(e) => {
+        if (!e.relatedTarget || (e.relatedTarget as HTMLElement).nodeName === 'HTML') {
+          setIsDraggingOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        const hasFiles = e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files');
+        if (hasFiles) {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingOver(false);
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            processBatchFiles(Array.from(e.dataTransfer.files));
+          }
+        }
+      }}
+      className="studio-shell flex w-full max-w-full h-screen overflow-hidden overflow-x-hidden text-slate-900 dark:text-slate-100 relative"
     >
       {/* Drag & Drop Visual Overlay */}
       {isDraggingOver && (
@@ -1394,14 +1450,15 @@ export default function SheetBrainStudio() {
         onAddSheet={handleAddSheet}
         onDeleteSheet={handleDeleteSheet}
         onRenameSheet={handleRenameSheet}
+        onReorderSheets={handleReorderSheets}
         onNewBlankSpreadsheet={handleCreateNewBlankSpreadsheet}
         onClearAllData={handleClearAllData}
       />
 
       {/* Main Studio Body */}
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-100 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 overflow-hidden transition-colors">
+      <div className="flex-1 flex flex-col min-w-0 w-full max-w-full bg-slate-100 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 overflow-hidden overflow-x-hidden transition-colors">
         {/* 1. Top Studio Header Bar */}
-        <header className="h-12 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-3 flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 text-xs transition-colors">
+        <header className="min-h-12 h-auto py-1.5 sm:h-12 sm:py-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-3 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 shrink-0 text-xs transition-colors">
           {/* Brand Identity & Logo Badge (when sidebar is collapsed or on desktop) */}
           <div className={`${isSidebarCollapsed ? 'flex' : 'hidden md:flex'} items-center gap-1.5 sm:gap-2 pr-2 border-r border-slate-200 dark:border-slate-800/80 shrink-0`}>
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 shadow-inner">
@@ -1461,7 +1518,7 @@ export default function SheetBrainStudio() {
           </div>
 
           {/* Model Synthesis Prompt Bar - ALWAYS PROMINENT AND VISIBLE */}
-          <form onSubmit={handleGenerate} className="flex-1 min-w-[180px] max-w-sm sm:max-w-md lg:max-w-xl mx-1 sm:mx-2 flex items-center gap-1 sm:gap-1.5">
+          <form onSubmit={handleGenerate} className="order-last sm:order-none w-full sm:w-auto sm:flex-1 min-w-0 sm:min-w-[180px] max-w-sm sm:max-w-md lg:max-w-xl mx-1 sm:mx-2 flex items-center gap-1 sm:gap-1.5">
             <div className="relative flex-1 min-w-0">
               <input
                 ref={promptInputRef}
@@ -1540,7 +1597,7 @@ export default function SheetBrainStudio() {
               className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-medium select-none flex items-center gap-1 transition shrink-0"
             >
               <Cloud className={`w-3.5 h-3.5 ${cloudSaveStatus === 'saving' ? 'animate-pulse text-amber-500' : 'text-emerald-500'}`} />
-              <span className="text-[11px] font-semibold tracking-tight">{cloudSaveStatus === 'saving' ? 'AWS Saving...' : 'AWS ☁️ Saved'}</span>
+              <span className="hidden md:inline text-[11px] font-semibold tracking-tight">{cloudSaveStatus === 'saving' ? 'AWS Saving...' : 'AWS â˜ï¸ Saved'}</span>
             </button>
 
             {/* Share / Link Button */}
@@ -1570,8 +1627,8 @@ export default function SheetBrainStudio() {
         <AgentPipelineBar isCompiling={isCompiling} isSimulating={isSimulating} prompt={promptText} />
 
         {/* 2. View Mode Switcher Strip */}
-        <div className="h-10 bg-slate-100/90 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/80 px-4 flex items-center justify-between text-xs shrink-0 transition-colors">
-          <div className="flex items-center gap-1">
+        <div className="h-10 bg-slate-100/90 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/80 px-2 sm:px-4 flex items-center text-xs shrink-0 transition-colors">
+          <div className="flex items-center gap-1 w-full overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveView('grid')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg text-xs font-semibold transition ${
@@ -1580,8 +1637,8 @@ export default function SheetBrainStudio() {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-900/40'
               }`}
             >
-              <Table className="w-3.5 h-3.5" />
-              <span>Spreadsheet Grid</span>
+              <Table className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Spreadsheet Grid</span>
             </button>
 
             <button
@@ -1592,8 +1649,8 @@ export default function SheetBrainStudio() {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-900/40'
               }`}
             >
-              <LineChart className="w-3.5 h-3.5" />
-              <span>Visual Analytics</span>
+              <LineChart className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Visual Analytics</span>
             </button>
 
             <button
@@ -1604,8 +1661,8 @@ export default function SheetBrainStudio() {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-900/40'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Scenario Matrix</span>
+              <Sliders className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Scenario Matrix</span>
             </button>
 
             <button
@@ -1616,8 +1673,8 @@ export default function SheetBrainStudio() {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-900/40'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Formula Audit</span>
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Formula Audit</span>
             </button>
 
             <button
@@ -1628,8 +1685,8 @@ export default function SheetBrainStudio() {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-900/40'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Executive Report</span>
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Executive Report</span>
             </button>
           </div>
 
@@ -1638,7 +1695,7 @@ export default function SheetBrainStudio() {
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-cyan-400" />
               Univer Office Engine
             </span>
-            <span className="font-mono tabular-nums">{activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} rows · {activeSheet?.columns?.length || 0} cols · Formula Auto-calc</span>
+            <span className="font-mono tabular-nums">{activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0} rows Â· {activeSheet?.columns?.length || 0} cols Â· Formula Auto-calc</span>
           </div>
         </div>
 
@@ -1655,6 +1712,7 @@ export default function SheetBrainStudio() {
                 onAddSheet={handleAddSheet}
                 onDeleteSheet={handleDeleteSheet}
                 onRenameSheet={handleRenameSheet}
+                onReorderSheets={handleReorderSheets}
                 onCellChange={handleSheetUpdate}
                 theme={theme}
                 activeScenario={activeScenario}
