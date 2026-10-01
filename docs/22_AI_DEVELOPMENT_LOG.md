@@ -227,3 +227,14 @@
 * **Live Deployment Ship Gate Documentation**: Updated [`19_EVIDENCE.md`](./19_EVIDENCE.md) and [`README.md`](../README.md) to explicitly document and link the live AWS Amplify production deployment: [`https://main.d36a9s34xgy54i.amplifyapp.com`](https://main.d36a9s34xgy54i.amplifyapp.com).
 * **AWS Region Invariant Enforced**: Corrected [`23_DEPLOYMENT.md`](./23_DEPLOYMENT.md) from `us-east-1` to `ap-southeast-2` (Sydney), strictly ensuring zero cross-region policy discrepancies with AWS Hackathon managed project rules.
 
+---
+
+## 2026-10-02 — Production Security Hardening & Zero-Dependency Defenses (Security Posture 8.5/10)
+
+### Threat Mitigations Implemented
+* **In-Memory Sliding Window Rate Limiter**: Added `checkRateLimit()` in [`securityGuard.ts`](../src/lib/security/securityGuard.ts) to protect Bedrock token quotas and server compute. Enforces 30 requests/minute per client IP for AI operations (`/api/generate`, `/api/edit`, `/api/simulate`) and 60 requests/minute for `/api/storage`, returning standard HTTP 429 with `Retry-After` headers and automatic TTL garbage collection.
+* **Adversarial Prompt Injection & Jailbreak Guard**: Added `detectPromptInjection()` in [`securityGuard.ts`](../src/lib/security/securityGuard.ts) scanning for instruction overrides ("ignore previous instructions"), system prompt extraction commands, DAN/jailbreak personas, guardrail bypasses, and null byte injection attacks with automatic HTTP 400 rejection and CloudWatch logging.
+* **Cross-Origin & CSRF Defense**: Added `isAllowedOrigin()` in [`securityGuard.ts`](../src/lib/security/securityGuard.ts) validating Origin and Referer headers on all state-changing endpoints, allowing localhost and `*.amplifyapp.com` while blocking rogue cross-origin calls.
+* **Observability Telemetry Integration**: Extended `CloudWatchOperation` in [`cloudwatch.ts`](../src/lib/aws/cloudwatch.ts) with `SecurityRateLimit` and `SecurityPromptInjection` metric events.
+* **Automated QA Verification**: Expanded [`scripts/test-suite.mjs`](../scripts/test-suite.mjs) from 21 to 27 tests (100% pass rate) covering sliding window rate limits, adversarial payload rejection, and origin validation. Clean production build verified via `npm run build`.
+

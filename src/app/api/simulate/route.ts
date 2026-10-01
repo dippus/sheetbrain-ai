@@ -3,6 +3,12 @@ import { invokeBedrockAgent } from '@/lib/aws/bedrock';
 import { SheetColumn, SheetCell } from '@/types/sheet';
 import { logCloudWatchMetric } from '@/lib/aws/cloudwatch';
 import { detectMetricPolarity } from '@/lib/engine/scenarioEngine';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  detectPromptInjection,
+  isAllowedOrigin,
+} from '@/lib/security/securityGuard';
 
 interface SimulationDelta {
   cell: string;
@@ -27,12 +33,41 @@ const MAX_HYPOTHESIS_LENGTH = 500;
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
+
+  // 1. Cross-Origin CSRF Defense
+  if (!isAllowedOrigin(req)) {
+    return NextResponse.json(
+      { success: false, error: 'Forbidden: Untrusted cross-origin request.' },
+      { status: 403 }
+    );
+  }
+
+  // 2. Sliding Window Rate Limiting (30 requests/minute per client IP)
+  const rateLimit = checkRateLimit(req, { limit: 30, windowMs: 60000, action: 'simulate' });
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit);
+  }
+
   try {
     const body = await req.json();
     const { hypothesis, sheet, targetColKey, multiplier: explicitMultiplier } = body;
 
     if (!hypothesis && explicitMultiplier === undefined) {
       return NextResponse.json({ error: 'Hypothesis or multiplier is required' }, { status: 400 });
+    }
+
+    // 3. Adversarial Prompt Injection & Jailbreak Defense
+    if (typeof hypothesis === 'string' && hypothesis.trim()) {
+      const promptSec = detectPromptInjection(hypothesis);
+      if (!promptSec.isSafe) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Security Alert: ${promptSec.reason}`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Reject oversized hypotheses before any model invocation occurs.

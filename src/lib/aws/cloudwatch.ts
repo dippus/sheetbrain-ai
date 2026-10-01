@@ -25,7 +25,9 @@ export type CloudWatchOperation =
   | 'Agent5_SelfCorrection'
   | 'GenerateWorkbook_MultiAgentPipeline'
   | 'EditPlanner'
-  | 'ApplyEditOperations';
+  | 'ApplyEditOperations'
+  | 'SecurityRateLimit'
+  | 'SecurityPromptInjection';
 
 export interface CloudWatchMetricData {
   operation: CloudWatchOperation;

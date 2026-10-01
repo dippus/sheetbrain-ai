@@ -1,10 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveWorkbookToS3, getWorkbookFromS3, listPersistedWorkbooks } from '@/lib/aws/s3';
 import { WorkbookModel } from '@/types/sheet';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  isAllowedOrigin,
+} from '@/lib/security/securityGuard';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  // 1. Cross-Origin CSRF Defense
+  if (!isAllowedOrigin(req)) {
+    return NextResponse.json(
+      { success: false, error: 'Forbidden: Untrusted cross-origin request.' },
+      { status: 403 }
+    );
+  }
+
+  // 2. Sliding Window Rate Limiting (60 requests/minute per client IP)
+  const rateLimit = checkRateLimit(req, { limit: 60, windowMs: 60000, action: 'storage' });
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit);
+  }
+
   try {
     const body = await req.json();
     const workbook = body.workbook as WorkbookModel;

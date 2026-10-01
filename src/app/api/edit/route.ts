@@ -4,6 +4,12 @@ import { applyEditPlan } from '@/lib/engine/editApplier';
 import { recalculateWorkbook } from '@/lib/engine/formulaEngine';
 import { logCloudWatchMetric } from '@/lib/aws/cloudwatch';
 import { SheetData, WorkbookModel } from '@/types/sheet';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  detectPromptInjection,
+  isAllowedOrigin,
+} from '@/lib/security/securityGuard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -26,6 +32,20 @@ const MAX_INSTRUCTION_LENGTH = 600;
 export async function POST(request: NextRequest) {
   const startedAt = Date.now();
 
+  // 1. Cross-Origin CSRF Defense
+  if (!isAllowedOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: 'Forbidden: Untrusted cross-origin request.' },
+      { status: 403 }
+    );
+  }
+
+  // 2. Sliding Window Rate Limiting (30 requests/minute per client IP)
+  const rateLimit = checkRateLimit(request, { limit: 30, windowMs: 60000, action: 'edit' });
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit);
+  }
+
   let body: EditRequestBody;
   try {
     body = (await request.json()) as EditRequestBody;
@@ -37,6 +57,19 @@ export async function POST(request: NextRequest) {
   if (!instruction) {
     return NextResponse.json({ success: false, error: 'An instruction is required.' }, { status: 400 });
   }
+
+  // 3. Adversarial Prompt Injection & Jailbreak Defense
+  const promptSec = detectPromptInjection(instruction);
+  if (!promptSec.isSafe) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Security Alert: ${promptSec.reason}`,
+      },
+      { status: 400 }
+    );
+  }
+
   if (instruction.length > MAX_INSTRUCTION_LENGTH) {
     return NextResponse.json(
       { success: false, error: `Instruction is too long (max ${MAX_INSTRUCTION_LENGTH} characters).` },
