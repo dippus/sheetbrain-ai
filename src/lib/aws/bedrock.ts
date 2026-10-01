@@ -11,6 +11,43 @@ const modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-202
  */
 const REQUEST_TIMEOUT_MS = Number(process.env.BEDROCK_TIMEOUT_MS) || 90000;
 
+export interface BedrockRuntimeState {
+  region: string;
+  configuredModelId: string;
+  /** The model actually invoked, accounting for the Mantle endpoint remap. */
+  effectiveModelId: string;
+  transport: 'mantle' | 'invoke-model' | 'none';
+  authConfigured: boolean;
+  /** No Bedrock guardrail is wired up in this project. */
+  guardrailConfigured: boolean;
+}
+
+/**
+ * Reports what Bedrock configuration is genuinely in effect, so the UI can
+ * display real values instead of hardcoded marketing strings. Nothing here is
+ * a secret: it is the model name, the region, and boolean capability flags.
+ */
+export function describeBedrockRuntime(): BedrockRuntimeState {
+  const apiKey = process.env.AWS_BEARER_TOKEN_BEDROCK || process.env.AWS_BEDROCK_API_KEY || '';
+  const hasIamCredentials = Boolean(
+    process.env.AWS_ACCESS_KEY_ID || process.env.AWS_PROFILE || process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+  );
+
+  const isMantle = Boolean(apiKey)
+    ? apiKey.startsWith('ABSKTWFudGxl') || (!modelId.startsWith('anthropic.') && !modelId.startsWith('amazon.nova'))
+    : false;
+  const effectiveModelId = isMantle && modelId.startsWith('anthropic.') ? 'deepseek.v3.2' : modelId;
+
+  return {
+    region,
+    configuredModelId: modelId,
+    effectiveModelId,
+    transport: apiKey ? (isMantle ? 'mantle' : 'invoke-model') : hasIamCredentials ? 'invoke-model' : 'none',
+    authConfigured: Boolean(apiKey) || hasIamCredentials,
+    guardrailConfigured: Boolean(process.env.BEDROCK_GUARDRAIL_ID),
+  };
+}
+
 // Initialize Bedrock client. Reads explicit credentials or IAM role automatically.
 export function getBedrockClient(): BedrockRuntimeClient | null {
   try {

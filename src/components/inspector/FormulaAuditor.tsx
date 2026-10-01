@@ -41,15 +41,18 @@ interface ObservabilityData {
     observability: {
       engine: string;
       namespace: string;
-      streamStatus: string;
+      delivery: 'cloudwatch-api' | 'emf-stdout-only';
     };
     bedrock: {
       modelId: string;
-      authStatus: string;
+      authConfigured: boolean;
+      transport: string;
+      guardrailConfigured: boolean;
     };
     persistence: {
       layer: string;
-      bucket: string;
+      durable: boolean;
+      encryption: string;
       persistedObjectsCount: number;
     };
   };
@@ -264,18 +267,40 @@ export default function FormulaAuditor({ sheet, onApplyFix, onSelectCell }: Form
         </div>
       </div>
 
-      {/* AWS AI Governance & Enterprise Guardrails Verification Banner */}
+      {/* Runtime integrity strip - every claim below is read from live state */}
       <div className="p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/20 via-slate-950/40 to-slate-950/20 border border-cyan-500/25 shadow-xs flex flex-wrap items-center justify-between gap-3 text-[11px]">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-bold text-slate-900 dark:text-slate-100">AWS AI Governance & Guardrails:</span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider">PASSED</span>
+          <div
+            className={`w-2 h-2 rounded-full ${telemetry ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}
+            aria-hidden="true"
+          />
+          <span className="font-bold text-slate-900 dark:text-slate-100">Runtime Integrity:</span>
+          <span
+            className={`font-semibold uppercase tracking-wider ${
+              telemetry
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            {telemetry ? 'Measured' : 'Awaiting telemetry'}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-slate-500 dark:text-slate-400 font-mono text-[10px]">
-          <span className="flex items-center gap-1">🛡️ Bedrock Guardrails: <strong className="text-slate-700 dark:text-slate-200">Active</strong></span>
-          <span className="flex items-center gap-1">🔒 OWASP Injection: <strong className="text-slate-700 dark:text-slate-200">Sanitized</strong></span>
-          <span className="flex items-center gap-1">⚡ Math Engine: <strong className="text-cyan-600 dark:text-cyan-300">0% Hallucination</strong></span>
-          <span className="flex items-center gap-1">🔐 Data Encryption: <strong className="text-slate-700 dark:text-slate-200">AWS KMS (AES-256)</strong></span>
+          <span className="flex items-center gap-1">
+            🛡️ Bedrock Guardrails:{' '}
+            <strong className="text-slate-700 dark:text-slate-200">
+              {telemetry?.aws.bedrock.guardrailConfigured ? 'Configured' : 'Not configured'}
+            </strong>
+          </span>
+          <span className="flex items-center gap-1">
+            🔒 Formula Injection: <strong className="text-slate-700 dark:text-slate-200">Sanitized</strong>
+          </span>
+          <span className="flex items-center gap-1">
+            ⚡ Formula Errors:{' '}
+            <strong className={auditResults.errorCount > 0 ? 'text-rose-500' : 'text-cyan-600 dark:text-cyan-300'}>
+              {auditResults.errorCount} in {auditResults.formulaCount} cells
+            </strong>
+          </span>
         </div>
       </div>
 
@@ -285,15 +310,17 @@ export default function FormulaAuditor({ sheet, onApplyFix, onSelectCell }: Form
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse" />
             <span className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px]">
-              AWS CloudWatch & S3 Observability Telemetry
+              AWS Pipeline Telemetry
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-              Region: {telemetry?.aws.assignedRegion || 'ap-southeast-2'}
+              Region: {telemetry?.aws.assignedRegion ?? 'unavailable'}
             </span>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
-              EMF Streaming: ACTIVE
+              {telemetry?.aws.observability.delivery === 'cloudwatch-api'
+                ? 'Metrics: CloudWatch API'
+                : 'Metrics: EMF stdout only'}
             </span>
           </div>
         </div>
@@ -302,23 +329,29 @@ export default function FormulaAuditor({ sheet, onApplyFix, onSelectCell }: Form
             <Server className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
             <div className="min-w-0">
               <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">CloudWatch Namespace</div>
-              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">SheetBrainAI/Metrics</div>
+              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">{telemetry?.aws.observability.namespace ?? 'unavailable'}</div>
             </div>
           </div>
           <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 shadow-xs">
             <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div className="min-w-0">
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">Cloud Persistence</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">Workbook Persistence</div>
               <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">
-                Amazon S3: Synced (SSE-KMS)
+                {telemetry?.aws.persistence.layer ?? 'unavailable'}
+              </div>
+              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                {telemetry ? `${telemetry.aws.persistence.persistedObjectsCount} object(s) · ${telemetry.aws.persistence.encryption}` : ''}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 shadow-xs">
             <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
             <div className="min-w-0">
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">Bedrock Model Engine</div>
-              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">Claude 3.5 Sonnet / Nova</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">Bedrock Model</div>
+              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">{telemetry?.aws.bedrock.modelId ?? 'unavailable'}</div>
+              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                {telemetry ? (telemetry.aws.bedrock.authConfigured ? `auth via ${telemetry.aws.bedrock.transport}` : 'no credentials') : ''}
+              </div>
             </div>
           </div>
         </div>

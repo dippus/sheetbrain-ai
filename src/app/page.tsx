@@ -1316,6 +1316,20 @@ export default function SheetBrainStudio() {
   const getBoardroomMarkdown = useCallback(() => {
     const totalRows = activeSheet?.rowCount ? activeSheet.rowCount - 1 : 0;
     const totalCols = activeSheet?.columns?.length || 0;
+
+    // HONESTY (REQ-NF-007): the governance section below reports measured counts
+    // from the live sheet instead of asserting a pass rate. A briefing that
+    // claims "100% verified" without reading the cells is worse than no claim.
+    const liveCells = activeSheet?.cellData || {};
+    const recomputed = recalculateWorkbook(liveCells);
+    const formulaCoords = Object.keys(liveCells).filter(coord => Boolean(liveCells[coord].f));
+    const errorCoords = formulaCoords.filter(coord => {
+      const value = recomputed[coord]?.v;
+      return typeof value === 'string' && /^#(VALUE!|REF!|DIV\/0!|NAME\?|N\/A|NUM!|NULL!)$/i.test(value.trim());
+    });
+    const integrityPct = formulaCoords.length === 0
+      ? 100
+      : Math.round(((formulaCoords.length - errorCoords.length) / formulaCoords.length) * 100);
     const modelTitle = safeWorkbook?.title || 'SheetBrain Financial Model';
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     
@@ -1327,18 +1341,17 @@ export default function SheetBrainStudio() {
 - **Active Scenario**: ${activeScenario || 'Baseline Model (Pre-Simulation State)'}
 - **Dataset Dimensions**: ${totalRows} data rows across ${totalCols} columns
 - **Engine Protocol**: 100% Deterministic Client-Side Computation (Hybrid Offline Engine)
-- **AWS Cloud Persistence**: Amazon S3 (ap-southeast-2) with Zero Hardcoded Cloud Secrets
+- **Workbook Persistence**: Measured at export time - run the Formula Audit tab to confirm current storage layer.
 
 ## 2. Model Governance & Audit Verification
-- **Formula Integrity**: 100% automated syntax verification passed
+- **Formula Integrity**: ${integrityPct}% of ${formulaCoords.length} formula cells evaluated without error (${errorCoords.length} failing).
 - **Security Check**: Active formula injection sanitization (=, @, +, - command stripping)
-- **Circularity Check**: 0 circular reference loops detected
+- **Circularity Check**: Every injected formula is screened by the anti-circular guard before it reaches the sheet.
 - **Compute Architecture**: Bedrock generative models emit syntax only; Univer computes deterministic values.
 
 ## 3. Key Observations & Findings
 - Real-time cell delta calculation tracks baseline variance without compounding errors.
-- Visual analytics and 2-way sensitivity matrix confirm cost driver elasticity.
-- Scenario stress-testing validated against multi-period cash runway thresholds.
+- Visual analytics and the sensitivity matrix expose cost-driver sensitivity to scenario shocks.
 
 ## 4. Strategic Governance Recommendations
 1. Validate top variance items with department heads prior to quarterly budget sign-off.

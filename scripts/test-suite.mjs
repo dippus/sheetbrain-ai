@@ -143,6 +143,77 @@ runTest('12-Month SaaS Continuous Balance Cascade (=J2, =J3...)', () => {
 });
 
 // ---------------------------------------------------------
+// SUITE 2b: Summary Row Aggregation Semantics
+// ---------------------------------------------------------
+console.log('\n📋 SUITE 2b: Summary Row Aggregation Semantics');
+
+runTest('Running-balance column reports closing value, never a running SUM', () => {
+  // A carry-forward cascade: every row restates the same account snapshot.
+  const hf = HyperFormula.buildFromSheets({
+    Model: [
+      ['Month', 'Revenue', 'Expense', 'Balance', 'TOTAL / SUMMARY'],
+      ['M1', 10000, 5000, '=B2-C2', null],
+      ['M2', 11000, 5200, '=B3-C3', null],
+      ['M3', 12000, 5400, '=B4-C4', null],
+    ]
+  }, { licenseKey: 'gpl-v3' });
+  const sid = hf.getSheetId('Model');
+
+  hf.setCellContents({ sheet: sid, col: 4, row: 4 }, [['=SUM(D2:D4)']]);
+  const summed = hf.getCellValue({ col: 4, row: 4, sheet: sid });
+
+  hf.setCellContents({ sheet: sid, col: 4, row: 4 }, [['=D4']]);
+  const closing = hf.getCellValue({ col: 4, row: 4, sheet: sid });
+
+  // 5000 + 5800 + 6600 = 17,400 of pure double counting.
+  assert.strictEqual(summed, 17400, 'SUM over a balance cascade double counts every period');
+  assert.strictEqual(closing, 6600, 'Closing balance is the only defensible summary for a balance column');
+  assert.notStrictEqual(summed, closing, 'Regression: summary must differ between additive and snapshot columns');
+});
+
+runTest('Additive flow column still sums correctly in the summary row', () => {
+  const hf = HyperFormula.buildFromSheets({
+    Model: [
+      ['Month', 'Revenue', 'Cash Flow'],
+      ['M1', 10000, '=B2'],
+      ['M2', 11000, '=B3'],
+      ['M3', 12000, '=B4'],
+      ['SUMMARY', null, '=SUM(C2:C4)'],
+    ]
+  }, { licenseKey: 'gpl-v3' });
+  const sid = hf.getSheetId('Model');
+
+  assert.strictEqual(
+    hf.getCellValue({ col: 2, row: 4, sheet: sid }),
+    33000,
+    'A per-period flow column must remain additive'
+  );
+});
+
+runTest('An erroring row formula poisons every dependent aggregate', () => {
+  // Justifies stripping erroring formulas before building the summary row:
+  // "Allowances = Employee Name - Basic Salary" collapses the whole column.
+  const hf = HyperFormula.buildFromSheets({
+    Model: [
+      ['Emp ID', 'Employee Name', 'Basic Salary', 'Allowances'],
+      ['E001', 'John Doe', 50000, '=B2-C2'],
+      ['E002', 'Jane Smith', 60000, '=B3-C3'],
+      ['SUMMARY', null, '=SUM(C2:C3)', '=SUM(D2:D3)'],
+    ]
+  }, { licenseKey: 'gpl-v3' });
+  const sid = hf.getSheetId('Model');
+
+  const badCell = hf.getCellValue({ col: 3, row: 1, sheet: sid });
+  const badTotal = hf.getCellValue({ col: 3, row: 3, sheet: sid });
+
+  // HyperFormula surfaces errors as DetailedCellError objects, not bare strings.
+  const errorText = v => (v && typeof v === 'object' && 'value' in v ? v.value : v);
+
+  assert.strictEqual(errorText(badCell), '#VALUE!', 'Subtracting a text cell must surface as #VALUE!');
+  assert.strictEqual(errorText(badTotal), '#VALUE!', 'The error propagates into the summary total');
+});
+
+// ---------------------------------------------------------
 // SUITE 3: Statistical Outlier & Anomaly Radar Analysis
 // ---------------------------------------------------------
 console.log('\n📋 SUITE 3: Statistical Outlier & Anomaly Engine');
