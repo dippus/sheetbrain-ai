@@ -15,7 +15,7 @@
 
 ---
 
-## 💡 What is SheetBrain AI? (Hum Kya Bana Rahe Hain?)
+## 💡 What is SheetBrain AI? (Executive Overview & Problem Statement)
 
 Most AI tools (like ChatGPT or Claude) only output **dead text or static markdown tables** in a chat box. You cannot click cells, edit numbers, calculate dynamic formulas, or generate interactive charts.
 
