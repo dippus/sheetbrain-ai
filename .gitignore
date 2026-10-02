@@ -46,3 +46,15 @@ docs/00_HACKATHON_RULES.md
 docs/19_EVIDENCE.md
 docs/20_DEMO_SCRIPT.md
 docs/21_SUBMISSION_CHECKLIST.md
+
+# Internal AI Tooling Scaffolding & Agent Frameworks
+.agents/
+.gsd/
+.agent/
+adapters/
+GSD-STYLE.md
+PROJECT_RULES.md
+model_capabilities.yaml
+.gemini/
+.vscode/
+docs/18_TASKS.md
