@@ -3,9 +3,11 @@
 > **Transform Natural Language into Living, Formula-Driven Spreadsheets & Visual Dashboards in Seconds.**
 
 👤 **Lead Developer & Architect**: **DIPPU SINHA** ([@dippus](https://github.com/dippus))  
-🚀 **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
+🚀 **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)  
+🎬 **2-Minute Demo Video**: [https://youtu.be/Hxn7xwU3NO4](https://youtu.be/Hxn7xwU3NO4)
 
 [![Author: DIPPU SINHA](https://img.shields.io/badge/Author-DIPPU%20SINHA-blue.svg)](https://github.com/dippus)
+[![Demo Video](https://img.shields.io/badge/Demo%20Video-YouTube%20(1m58s)-red.svg?logo=youtube)](https://youtu.be/Hxn7xwU3NO4)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-dippus%2Fsheetbrain--ai-181717.svg?logo=github)](https://github.com/dippus/sheetbrain-ai)
 [![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude%203.5%20Sonnet-orange.svg)](https://aws.amazon.com/bedrock/)
 [![Amazon S3](https://img.shields.io/badge/AWS-S3%20Object%20Storage-569A31.svg)](https://aws.amazon.com/s3/)
