@@ -134,6 +134,16 @@ For complete technical and architectural specifications, see:
 
 ---
 
+## 👨‍💻 Author & Developer Profile
+
+* **Developer**: **Dippu Kumar**
+* **GitHub**: [@sajankuma7000-art](https://github.com/sajankuma7000-art)
+* **AWS Builder Center**: Dippu Kumar
+* **Hackathon Submission**: AWS "Zero to Shipped" Hackathon — *Workplace Efficiency Track (Community Lane)*
+* **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
+
+---
+
 ## 📄 License
 
 This project is open-source and licensed under the [MIT License](./LICENSE).
