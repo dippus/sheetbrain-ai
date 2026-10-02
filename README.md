@@ -137,6 +137,8 @@ For complete technical and architectural specifications, see:
 ## 👨‍💻 Author & Developer Profile
 
 * **Developer**: **Dippu Kumar**
+* **Role**: Full-Stack AI Engineer & Autonomous Systems Architect
+* **Bio**: Passionate software engineer specializing in neuro-symbolic AI systems, serverless cloud architectures on AWS, and deterministic mathematical engines. Creator of SheetBrain AI, built to bridge foundation models with reactive spreadsheet canvases to eliminate LLM calculation hallucinations.
 * **GitHub**: [@sajankuma7000-art](https://github.com/sajankuma7000-art)
 * **AWS Builder Center**: Dippu Kumar
 * **Hackathon Submission**: AWS "Zero to Shipped" Hackathon — *Workplace Efficiency Track (Community Lane)*
