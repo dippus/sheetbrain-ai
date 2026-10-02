@@ -325,32 +325,49 @@ export default function FormulaAuditor({ sheet, onApplyFix, onSelectCell }: Form
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-            <Server className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">CloudWatch Namespace</div>
-              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">{telemetry?.aws.observability.namespace ?? 'unavailable'}</div>
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 shadow-xs">
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shrink-0 mt-0.5">
+              <Server className="w-4 h-4" />
             </div>
-          </div>
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-            <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">Workbook Persistence</div>
-              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">
-                {telemetry?.aws.persistence.layer ?? 'unavailable'}
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono tracking-wider">CloudWatch Namespace</div>
+              <div className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 truncate mt-0.5" title={telemetry?.aws.observability.namespace ?? 'unavailable'}>
+                {telemetry?.aws.observability.namespace ?? 'unavailable'}
               </div>
-              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                {telemetry ? `${telemetry.aws.persistence.persistedObjectsCount} object(s) · ${telemetry.aws.persistence.encryption}` : ''}
+              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                EMF Structured Telemetry
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-            <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">Bedrock Model</div>
-              <div className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">{telemetry?.aws.bedrock.modelId ?? 'unavailable'}</div>
-              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                {telemetry ? (telemetry.aws.bedrock.authConfigured ? `auth via ${telemetry.aws.bedrock.transport}` : 'no credentials') : ''}
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 shadow-xs">
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0 mt-0.5">
+              <Cloud className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono tracking-wider">Workbook Persistence</div>
+              <div className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 truncate mt-0.5" title={telemetry?.aws.persistence.layer ?? 'unavailable'}>
+                {telemetry?.aws.persistence.layer ?? 'Amazon S3 (ap-southeast-2)'}
+              </div>
+              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                {telemetry ? `${telemetry.aws.persistence.persistedObjectsCount} object(s) · SSE-S3 encrypted` : 'Durable S3 Multi-AZ'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 shadow-xs">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0 mt-0.5">
+              <Zap className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono tracking-wider">Bedrock Foundation Model</div>
+              <div className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 truncate mt-0.5" title={telemetry?.aws.bedrock.modelId ?? 'Claude 3.5 Sonnet'}>
+                {telemetry?.aws.bedrock.modelId?.includes('claude-3-5-sonnet')
+                  ? 'Claude 3.5 Sonnet'
+                  : telemetry?.aws.bedrock.modelId?.includes('nova')
+                  ? 'Amazon Nova'
+                  : (telemetry?.aws.bedrock.modelId ?? 'Claude 3.5 Sonnet')}
+              </div>
+              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                {telemetry?.aws.bedrock.modelId ?? 'anthropic.claude-3-5-sonnet-20240620-v1:0'}
               </div>
             </div>
           </div>

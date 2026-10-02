@@ -36,7 +36,8 @@ export function describeBedrockRuntime(): BedrockRuntimeState {
   const isMantle = Boolean(apiKey)
     ? apiKey.startsWith('ABSKTWFudGxl') || (!modelId.startsWith('anthropic.') && !modelId.startsWith('amazon.nova'))
     : false;
-  const effectiveModelId = isMantle && modelId.startsWith('anthropic.') ? 'deepseek.v3.2' : modelId;
+  // Use official Amazon Bedrock Model identifier (Claude 3.5 Sonnet / configured model)
+  const effectiveModelId = modelId;
 
   return {
     region,

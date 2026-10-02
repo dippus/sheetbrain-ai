@@ -34,3 +34,15 @@ yarn-error.log*
 
 # IDE & Editor Scratch
 .trae/
+
+.idea/
+.kiro/
+.kilo/
+.vscode/
+tsconfig.tsbuildinfo
+
+# Personal Hackathon Notes & Submission Checklists
+docs/00_HACKATHON_RULES.md
+docs/19_EVIDENCE.md
+docs/20_DEMO_SCRIPT.md
+docs/21_SUBMISSION_CHECKLIST.md

@@ -233,13 +233,13 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
   });
 
   // Domain-specific formula rules
-  const isAcademic = metadata?.domain?.includes('Education') || columns.some(c => /student|grade|marks|roll/i.test(c.label));
-  const isSaaS = metadata?.domain === 'SaaS Finance';
-  const isHR = metadata?.domain === 'HR & Payroll';
-  const isHealth = metadata?.domain === 'Healthcare';
-  const isEcommerce = metadata?.domain?.includes('Sales') || columns.some(c => /order|units sold/i.test(c.label));
-  const isProject = metadata?.domain?.includes('Project') || columns.some(c => /sprint|story point|task key/i.test(c.label));
-  const isInventory = metadata?.domain?.includes('Inventory') || columns.some(c => /sku|reorder/i.test(c.label));
+  const isAcademic = /education|academic|grade|school|student|college|exam/i.test(metadata?.domain || '') || columns.some(c => /student|grade|marks|roll|theory|internal/i.test(c.label));
+  const isSaaS = /saas|runway|mrr|arr|burn|cashflow|venture|finance/i.test(metadata?.domain || '') || columns.some(c => /mrr|arr|runway|burn|cash balance|starting cash|ending cash|horizon/i.test(c.label));
+  const isHR = /hr|payroll|salary|employee|compensation/i.test(metadata?.domain || '') || columns.some(c => /base salary|net pay|deduction|employee|incentive/i.test(c.label));
+  const isHealth = /health|medical|hospital|clinic/i.test(metadata?.domain || '') || columns.some(c => /copay|patient|bill|diagnosis|doctor/i.test(c.label));
+  const isEcommerce = /sales|commerce|retail|e-commerce|store/i.test(metadata?.domain || '') || columns.some(c => /order|units sold|unit price|discount|gross revenue/i.test(c.label));
+  const isProject = /project|sprint|scrum|engineering|jira/i.test(metadata?.domain || '') || columns.some(c => /sprint|story point|task key|actual hours|variance hours/i.test(c.label));
+  const isInventory = /inventory|warehouse|supply|stock/i.test(metadata?.domain || '') || columns.some(c => /sku|reorder|stock level|unit cost|inventory value/i.test(c.label));
 
   // Data Rows (Row 2 .. lastDataRow)
   rawRows.forEach((row, idx) => {

@@ -4,8 +4,11 @@
 
 🚀 **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
 
-[![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20deepseek.v3.2-orange.svg)](https://aws.amazon.com/bedrock/)
+[![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude%203.5%20Sonnet-orange.svg)](https://aws.amazon.com/bedrock/)
+[![Amazon S3](https://img.shields.io/badge/AWS-S3%20Object%20Storage-569A31.svg)](https://aws.amazon.com/s3/)
+[![AWS CloudWatch](https://img.shields.io/badge/AWS-CloudWatch%20EMF-FF4F8B.svg)](https://aws.amazon.com/cloudwatch/)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-AWS%20Amplify-success.svg)](https://main.ddro9iqx1ajmw.amplifyapp.com)
+[![Public Telemetry](https://img.shields.io/badge/Observability-API-blueviolet.svg)](https://main.ddro9iqx1ajmw.amplifyapp.com/api/observability)
 [![Univer Office SDK](https://img.shields.io/badge/Univer-Office%20SDK-blue.svg)](https://univer.ai/)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14%20App%20Router-black.svg)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -48,7 +51,7 @@ Most AI tools (like ChatGPT or Claude) only output **dead text or static markdow
 
 ## 🧠 How It Works (Autonomous Multi-Agent Pipeline)
 
-SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock (`deepseek.v3.2` on Bedrock Mantle / Sydney `ap-southeast-2`)** and a local deterministic engine:
+SheetBrain uses a 5-stage collaborative neuro-symbolic architecture powered by **Amazon Bedrock (Claude 3.5 Sonnet & Amazon Nova in Sydney `ap-southeast-2`)** and a local deterministic engine:
 
 ```
   ┌────────────────────────────────────────────────────────────────────────┐
@@ -64,7 +67,7 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
                                       ▼
   ┌────────────────────────────────────────────────────────────────────────┐
   │ 🧮 AGENT 2: Formula Compiler                                           │
-  │ Synthesizes reactive Excel formulas (=SUM, =IF, =ROUND) & guards       │
+  │ Synthesizes reactive Excel formulas (=SUM, =IF, =ROUND) & anti-circular│
   └───────────────────────────────────┬────────────────────────────────────┘
                                       │
                                       ▼
@@ -77,6 +80,12 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
   ┌────────────────────────────────────────────────────────────────────────┐
   │ ⚡ AGENT 4: Deterministic Math Engine (HyperFormula v3)                 │
   │ Zero-hallucination DAG recalculation & mathematical dependency resolve │
+  └───────────────────────────────────┬────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ 🛠️ AGENT 5: Self-Correction Loop                                       │
+  │ Audits recalculated matrix, auto-repairs defects & verifies convergence│
   └───────────────────────────────────┬────────────────────────────────────┘
                                       │
                                       ▼
@@ -94,10 +103,12 @@ SheetBrain uses a 4-agent collaborative architecture powered by **Amazon Bedrock
 |:---|:---|:---|
 | **Frontend Framework** | **Next.js 14+ (App Router) + TypeScript** | High-performance React framework with strict typing |
 | **Spreadsheet Engine** | **Univer Office SDK** (`@univerjs/core`, `@univerjs/sheets`) | Canvas-based Excel-grade spreadsheet runtime |
-| **Styling & UI** | **Tailwind CSS + Lucide Icons** | Modern dark/light mode, sleek glassmorphism studio UI |
+| **Styling & UI** | **Tailwind CSS + Lucide Icons** | Dark OLED Luxury fintech aesthetic, sleek glassmorphism |
 | **Charts** | **Recharts + Univer Charts** | Responsive, dynamic business visualizations |
-| **Generative AI** | **Amazon Bedrock (deepseek.v3.2 on Bedrock Mantle, ap-southeast-2)** | Semantic reasoning, ontology mapping & multi-agent intent |
-| **Formula Engine** | **HyperFormula v3.4.0 (Open-Source DAG Engine)** | Instant (<50ms) reactive dependency graph, IF(), VLOOKUP(), aggregations |
+| **Generative AI** | **Amazon Bedrock (Claude 3.5 Sonnet / Amazon Nova, ap-southeast-2)** | Semantic reasoning, ontology mapping & multi-agent intent |
+| **Formula Engine** | **HyperFormula v3.4.0 (Handsontable DAG Engine)** | Instant (<50ms) reactive dependency graph, IF(), VLOOKUP(), aggregations |
+| **Durable Storage** | **Amazon S3 (ap-southeast-2 Multi-AZ)** | Continuous background persistence for multi-sheet workbooks |
+| **Observability** | **Amazon CloudWatch EMF (Embedded Metric Format)** | Production structured metric emissions & latency tracking |
 | **Hosting & CI/CD** | **AWS Amplify Hosting (ap-southeast-2)** | Serverless hosting with CloudFront edge distribution |
 
 ---

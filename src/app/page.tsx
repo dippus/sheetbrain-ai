@@ -1707,10 +1707,10 @@ export default function SheetBrainStudio() {
               onClick={handleCloudSave}
               disabled={isCloudSaving}
               title="Continuous background persistence to Amazon S3 (ap-southeast-2). Click to force save now."
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-medium select-none flex items-center gap-1.5 transition shrink-0"
+              className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-medium select-none flex items-center gap-1.5 transition shrink-0"
             >
               <Cloud className={`w-3.5 h-3.5 shrink-0 ${cloudSaveStatus === 'saving' ? 'animate-pulse text-amber-500' : 'text-emerald-500'}`} />
-              <span className="hidden md:inline text-[11px] font-semibold tracking-tight whitespace-nowrap">{cloudSaveStatus === 'saving' ? 'Saving...' : 'AWS Saved'}</span>
+              <span className="hidden lg:inline text-[11px] font-semibold tracking-tight whitespace-nowrap">{cloudSaveStatus === 'saving' ? 'Saving...' : 'AWS Saved'}</span>
             </button>
 
             {/* Share / Link Button */}
@@ -1718,10 +1718,10 @@ export default function SheetBrainStudio() {
               onClick={handleCloudSave}
               disabled={isCloudSaving}
               title="Copy shareable link or force save to Amazon S3 (ap-southeast-2)"
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 font-medium text-xs transition shadow-2xs disabled:opacity-50 flex items-center gap-1"
+              className="px-2 sm:px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 font-medium text-xs transition shadow-2xs disabled:opacity-50 flex items-center gap-1.5 shrink-0"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">{isCloudSaving ? 'Saving...' : 'Share'}</span>
+              <Share2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline text-xs">{isCloudSaving ? 'Saving...' : 'Share'}</span>
             </button>
 
             {/* Export Dialog Button */}
