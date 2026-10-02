@@ -17,7 +17,7 @@ interface BedrockFormulaPayload {
  * amount and legitimately sums, whereas a "Cash Balance" is a snapshot.
  */
 const NON_ADDITIVE_LABEL =
-  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+\w+/i;
+  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+(assets|liabilities|equity|debt)/i;
 
 /**
  * Decides how a column may be aggregated in the summary row.
@@ -66,7 +66,7 @@ function buildSummaryFormula(
   const key = column.key;
   switch (strategy) {
     case 'average':
-      return { f: `=AVERAGE(${key}2:${key}${lastDataRow})`, strategy };
+      return { f: `=ROUND(AVERAGE(${key}2:${key}${lastDataRow}), 2)`, strategy };
     case 'closing':
       // Report where the sheet ends up, not a meaningless accumulation.
       return { f: `=${key}${lastDataRow}`, strategy };
@@ -377,8 +377,11 @@ function compileDeterministicFormulas(schema: SchemaArchitectOutput): FormulaCom
   columns.slice(1).forEach(c => {
     const coord = `${c.key}${summaryRow}`;
     if (isAcademic) {
-      if (c.type === 'percentage' || c.type === 'number') {
-        cellData[coord] = { f: `=AVERAGE(${c.key}2:${c.key}${lastDataRow})`, bold: true, align: 'right' };
+      if (c.type === 'percentage') {
+        cellData[coord] = { f: `=ROUND(AVERAGE(${c.key}2:${c.key}${lastDataRow}), 3)`, bold: true, align: 'right' };
+        formulaCount++;
+      } else if (c.type === 'number') {
+        cellData[coord] = { f: `=ROUND(AVERAGE(${c.key}2:${c.key}${lastDataRow}), 1)`, bold: true, align: 'right' };
         formulaCount++;
       }
     } else if (c.type === 'percentage' || c.type === 'number' || c.type === 'currency') {

@@ -13,7 +13,7 @@ import assert from 'node:assert';
 const XL_ERR = /^#(VALUE!|REF!|DIV\/0!|NAME\?|N\/A|NUM!|NULL!|ERROR!)$/i;
 const AGG = /\b(SUM|AVERAGE|MIN|MAX|COUNT)\s*\(/i;
 const SNAPSHOT =
-  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+\w+/i;
+  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+(assets|liabilities|equity|debt)/i;
 
 function runSelfCorrection(cellData, columnLabels, summaryRow, lastDataRow, maxIterations = 3) {
   const evaluate = cells => {

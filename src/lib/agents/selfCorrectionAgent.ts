@@ -31,7 +31,7 @@ const AGGREGATE = /\b(SUM|AVERAGE|MIN|MAX|COUNT)\s*\(/i;
  * Mirrors the compiler's summary strategy so both stages agree on semantics.
  */
 const SNAPSHOT_LABEL =
-  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+\w+/i;
+  /\b(balance|balances|bank\b|runway|remaining|leftover|inventory|stock|onhand|on_hand|on-hand|reserve|position|level|owed|payable|receivable|headcount|population)\b|cash\b(?!\s*flow)|total\s+(assets|liabilities|equity|debt)/i;
 
 interface AuditInput {
   cellData: Record<string, SheetCell>;
