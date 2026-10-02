@@ -34,6 +34,7 @@ interface UniverCellRaw {
     ht?: number;
     bg?: { rgb: string };
     cl?: { rgb: string };
+    n?: { pattern: string };
   };
 }
 
@@ -89,8 +90,19 @@ function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[
       const isHeaderRow = rowIdx === 0;
       const isSummaryRow = !isHeaderRow && !!cell.bold;
 
+      const colDef = safeColumns[colIdx];
+      const isPercentage = colDef?.type === 'percentage';
+      const isCurrency = colDef?.type === 'currency';
+
+      let numFormat: { pattern: string } | undefined = undefined;
+      if (isPercentage && !isHeaderRow) {
+        numFormat = { pattern: '0.0%' };
+      } else if (isCurrency && !isHeaderRow) {
+        numFormat = { pattern: '$#,##0.00' };
+      }
+
       // High-performance fast-path: standard unstyled data cells skip style object allocation
-      if (!isModified && !cell.fontColor && !isHeaderRow && !isSummaryRow && !cell.bg && !cell.bold && !cell.align && !isNumeric) {
+      if (!isModified && !cell.fontColor && !isHeaderRow && !isSummaryRow && !cell.bg && !cell.bold && !cell.align && !isNumeric && !numFormat) {
         univerCellData[rowIdx][colIdx] = {
           v: cell.v,
           f: cell.f,
@@ -130,6 +142,7 @@ function convertSheetDataToUniver(activeSheet: SheetData, allSheets?: SheetData[
           ht: cell.align === 'center' ? 2 : cell.align === 'right' || isNumeric ? 3 : 1,
           bg: bgColor ? { rgb: bgColor } : undefined,
           cl: { rgb: fontColor },
+          n: numFormat,
         },
       };
     }
