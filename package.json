@@ -1,6 +1,7 @@
 {
   "name": "sheetbrain-ai",
   "version": "0.1.0",
+  "author": "DIPPU SINHA <https://github.com/dippus>",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -2,8 +2,11 @@
 
 > **Transform Natural Language into Living, Formula-Driven Spreadsheets & Visual Dashboards in Seconds.**
 
+👤 **Lead Developer & Architect**: **DIPPU SINHA** ([@dippus](https://github.com/dippus))  
 🚀 **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
 
+[![Author: DIPPU SINHA](https://img.shields.io/badge/Author-DIPPU%20SINHA-blue.svg)](https://github.com/dippus)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-dippus%2Fsheetbrain--ai-181717.svg?logo=github)](https://github.com/dippus/sheetbrain-ai)
 [![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude%203.5%20Sonnet-orange.svg)](https://aws.amazon.com/bedrock/)
 [![Amazon S3](https://img.shields.io/badge/AWS-S3%20Object%20Storage-569A31.svg)](https://aws.amazon.com/s3/)
 [![AWS CloudWatch](https://img.shields.io/badge/AWS-CloudWatch%20EMF-FF4F8B.svg)](https://aws.amazon.com/cloudwatch/)
@@ -122,6 +125,24 @@ SheetBrain uses a 5-stage collaborative neuro-symbolic architecture powered by *
 
 ---
 
+## 🚀 Quick Start & Local Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/dippus/sheetbrain-ai.git
+cd sheetbrain-ai
+
+# 2. Install dependencies
+npm install
+
+# 3. Start local development server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser to start using SheetBrain AI.
+
+---
+
 ## 📂 Project Documentation Quick Links
 
 For complete technical and architectural specifications, see:
@@ -136,10 +157,12 @@ For complete technical and architectural specifications, see:
 
 ## 👨‍💻 Author & Developer Profile
 
-* **Developer**: **DIPPU SINHA**
+* **Developer & Project Lead**: **DIPPU SINHA**
+* **Role**: Lead Systems Architect & Full-Stack AI Engineer
 * **Bio**: AI Systems & Full-Stack Engineer | Architecting autonomous multi-agent spreadsheet intelligence platforms with AWS Bedrock, Next.js & TypeScript.
-* **GitHub**: [@sajankuma7000-art](https://github.com/sajankuma7000-art)
-* **AWS Builder Center**: DIPPU SINHA
+* **GitHub Profile**: [@dippus](https://github.com/dippus)
+* **Project Repository**: [https://github.com/dippus/sheetbrain-ai](https://github.com/dippus/sheetbrain-ai)
+* **AWS Builder Center Profile**: **DIPPU SINHA**
 * **Hackathon Submission**: AWS "Zero to Shipped" Hackathon — *Workplace Efficiency Track (Community Lane)*
 * **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
 
