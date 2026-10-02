@@ -136,11 +136,10 @@ For complete technical and architectural specifications, see:
 
 ## 👨‍💻 Author & Developer Profile
 
-* **Developer**: **Dippu Kumar**
-* **Role**: Full-Stack AI Engineer & Autonomous Systems Architect
-* **Bio**: Passionate software engineer specializing in neuro-symbolic AI systems, serverless cloud architectures on AWS, and deterministic mathematical engines. Creator of SheetBrain AI, built to bridge foundation models with reactive spreadsheet canvases to eliminate LLM calculation hallucinations.
+* **Developer**: **DIPPU SINHA**
+* **Bio**: AI Systems & Full-Stack Engineer | Architecting autonomous multi-agent spreadsheet intelligence platforms with AWS Bedrock, Next.js & TypeScript.
 * **GitHub**: [@sajankuma7000-art](https://github.com/sajankuma7000-art)
-* **AWS Builder Center**: Dippu Kumar
+* **AWS Builder Center**: DIPPU SINHA
 * **Hackathon Submission**: AWS "Zero to Shipped" Hackathon — *Workplace Efficiency Track (Community Lane)*
 * **Live Deployment**: [https://main.ddro9iqx1ajmw.amplifyapp.com](https://main.ddro9iqx1ajmw.amplifyapp.com)
 
